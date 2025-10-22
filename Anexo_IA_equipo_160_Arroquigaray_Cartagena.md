@@ -1680,3 +1680,400 @@ Preguntas finales de reflexión
 Si esta consulta tarda más de 5 segundos, ¿qué harías primero: índices, vista materializada, o rediseño del modelo?
 ¿Querés profundizar en alguna de estas mejoras o tenés otra consulta para optimizar? 🚀
  
+ETAPA 4
+
+Podrás ayudarme a mejorar las prácticas de seguridad, explicandome cómo se hace en esta parte? DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_por_dominio(IN p_dominio VARCHAR(10))
+BEGIN
+  SELECT dominio, marca, modelo, anio
+  FROM vehiculos
+  WHERE dominio = p_dominio;
+END //
+DELIMITER ;
+
+-- Prueba legítima
+CALL buscar_vehiculo_por_dominio('AB110LG');
+
+-- Prueba maliciosa (intento de inyección)
+CALL buscar_vehiculo_por_dominio("AB110LG' OR '1'='1");
+Relevant Posts
+0
+
+No tweets found
+
+
+RouteLLM
+Routing to Claude Sonnet 4.5
+¡Excelente pregunta! Vamos a analizar la seguridad de tu procedimiento paso a paso, con preguntas guía para que entiendas por qué es seguro (o no) y cómo mejorarlo.
+
+Análisis de seguridad del procedimiento actual
+Pregunta disparadora 1:
+¿Tu procedimiento actual es vulnerable a inyección SQL?
+¿Qué pasa cuando ejecutás CALL buscar_vehiculo_por_dominio("AB110LG' OR '1'='1")?
+Respuesta:
+✅ Tu procedimiento actual YA ES SEGURO contra inyección SQL
+
+¿Por qué?
+
+Usás parámetros preparados (IN p_dominio VARCHAR(10)).
+MySQL trata p_dominio como un valor literal, no como código SQL ejecutable.
+Cuando pasás "AB110LG' OR '1'='1", MySQL busca literalmente un dominio con ese texto completo (incluyendo la comilla y el OR), no lo interpreta como condición lógica.
+Demostración:
+sql
+Copy
+-- Esto NO ejecuta la inyección, busca literalmente ese string:
+CALL buscar_vehiculo_por_dominio("AB110LG' OR '1'='1");
+-- Equivale a:
+-- WHERE dominio = "AB110LG' OR '1'='1"  (busca ese texto exacto)
+Resultado esperado: 0 filas (porque no existe un dominio con ese valor literal).
+
+¿Cuándo SÍ habría vulnerabilidad?
+Pregunta disparadora 2:
+¿Qué pasaría si construyeras la consulta con concatenación de strings en lugar de parámetros?
+Ejemplo VULNERABLE (NO HAGAS ESTO):
+sql
+Copy
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_INSEGURO(IN p_dominio VARCHAR(10))
+BEGIN
+  -- ⚠️ VULNERABLE: concatenación directa
+  SET @query = CONCAT('SELECT dominio, marca, modelo, anio FROM vehiculos WHERE dominio = "', p_dominio, '"');
+  PREPARE stmt FROM @query;
+  EXECUTE stmt;
+  DEALLOCATE PREPARE stmt;
+END //
+DELIMITER ;
+
+-- Prueba maliciosa (FUNCIONA en versión insegura)
+CALL buscar_vehiculo_INSEGURO('AB110LG" OR "1"="1');
+¿Qué pasa aquí?
+
+La query construida sería:
+sql
+Copy
+SELECT ... WHERE dominio = "AB110LG" OR "1"="1"
+El OR "1"="1" se ejecuta como código SQL → devuelve TODOS los vehículos (inyección exitosa).
+Lección clave:
+
+✅ Parámetros preparados = seguro
+❌ Concatenación de strings = vulnerable
+Mejoras de seguridad para tu procedimiento
+Aunque tu procedimiento actual es seguro, podemos agregar capas adicionales de defensa (principio de "defensa en profundidad").
+
+Mejora 1: Validación de entrada (sanitización)
+Pregunta disparadora:
+
+¿Qué pasa si alguien pasa un dominio con caracteres raros como '; DROP TABLE vehiculos; --?
+Aunque no se ejecute (por los parámetros preparados), ¿querés permitir esos valores?
+Pista de mejora:
+Validar el formato del dominio antes de ejecutar la consulta:
+
+sql
+Copy
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro_v1(IN p_dominio VARCHAR(10))
+BEGIN
+  -- Validación 1: Rechazar NULL o vacío
+  IF p_dominio IS NULL OR TRIM(p_dominio) = '' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio no puede estar vacío';
+  END IF;
+  
+  -- Validación 2: Rechazar caracteres sospechosos (comillas, punto y coma, guiones dobles)
+  IF p_dominio REGEXP '[";\\-\\-]' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio contiene caracteres no permitidos';
+  END IF;
+  
+  -- Validación 3: Verificar formato esperado (ej: AA999AA o similar)
+  -- Ajustá el patrón según tu formato real
+  IF p_dominio NOT REGEXP '^[A-Z0-9]{5,10}$' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Formato de dominio inválido (debe ser 5-10 caracteres alfanuméricos)';
+  END IF;
+  
+  -- Si pasa todas las validaciones, ejecutar consulta
+  SELECT dominio, marca, modelo, anio
+  FROM vehiculos
+  WHERE dominio = p_dominio;
+END //
+DELIMITER ;
+Ventajas:
+
+Rechaza entradas malformadas antes de tocar la BD.
+Mejora la experiencia del usuario (mensajes de error claros).
+Reduce carga en la BD (no ejecuta queries inútiles).
+Pregunta de reflexión:
+
+¿Qué patrón REGEXP usarías para validar el formato de dominio de tu país? (Ej: Argentina usa AA999AA desde 2016)
+Mejora 2: Limitar columnas expuestas (principio de mínimo privilegio)
+Pregunta disparadora:
+
+¿Necesitás exponer todas las columnas de vehiculos o solo algunas?
+¿Qué pasa si en el futuro agregás columnas sensibles (ej: precio_compra, propietario_dni)?
+Pista de mejora:
+Ya lo estás haciendo bien: solo devolvés dominio, marca, modelo, anio (no SELECT *).
+
+Pero podés ir más allá:
+
+sql
+Copy
+-- Crear una vista que solo exponga datos públicos
+CREATE VIEW vehiculos_publicos AS
+SELECT dominio, marca, modelo, anio
+FROM vehiculos
+WHERE eliminado = FALSE;
+
+-- Usar la vista en el procedimiento
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro_v2(IN p_dominio VARCHAR(10))
+BEGIN
+  -- Validaciones (igual que antes)...
+  
+  -- Consultar vista en lugar de tabla directa
+  SELECT *
+  FROM vehiculos_publicos
+  WHERE dominio = p_dominio;
+END //
+DELIMITER ;
+Ventajas:
+
+Si agregás columnas sensibles a vehiculos, no se exponen automáticamente.
+Centralizás la lógica de "qué es público" en un solo lugar (la vista).
+Mejora 3: Auditoría (logging de accesos)
+Pregunta disparadora:
+
+Si alguien intenta buscar dominios sospechosos repetidamente, ¿cómo lo detectás?
+¿Querés registrar quién busca qué y cuándo?
+Pista de mejora:
+Crear una tabla de auditoría:
+
+sql
+Copy
+CREATE TABLE auditoria_busquedas (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  usuario VARCHAR(100),
+  dominio_buscado VARCHAR(10),
+  fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ip_origen VARCHAR(45),  -- IPv6 puede tener hasta 45 caracteres
+  resultado_encontrado BOOLEAN
+);
+
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro_v3(
+  IN p_dominio VARCHAR(10),
+  IN p_usuario VARCHAR(100),
+  IN p_ip VARCHAR(45)
+)
+BEGIN
+  DECLARE v_encontrado BOOLEAN DEFAULT FALSE;
+  
+  -- Validaciones (igual que antes)...
+  
+  -- Ejecutar búsqueda
+  SELECT dominio, marca, modelo, anio
+  FROM vehiculos
+  WHERE dominio = p_dominio;
+  
+  -- Verificar si se encontró resultado
+  IF FOUND_ROWS() > 0 THEN
+    SET v_encontrado = TRUE;
+  END IF;
+  
+  -- Registrar en auditoría
+  INSERT INTO auditoria_busquedas (usuario, dominio_buscado, ip_origen, resultado_encontrado)
+  VALUES (p_usuario, p_dominio, p_ip, v_encontrado);
+END //
+DELIMITER ;
+
+-- Uso:
+CALL buscar_vehiculo_seguro_v3('AB110LG', 'juan.perez', '192.168.1.100');
+Ventajas:
+
+Detectás patrones sospechosos (ej: 1000 búsquedas en 1 minuto desde la misma IP).
+Cumplís con regulaciones de protección de datos (trazabilidad).
+Podés analizar qué dominios se buscan más (estadísticas).
+Pregunta de reflexión:
+
+¿Cómo detectarías un ataque de fuerza bruta (alguien probando miles de dominios)? Pista: query sobre auditoria_busquedas agrupando por IP y contando búsquedas por minuto.
+Mejora 4: Rate limiting (limitar frecuencia de consultas)
+Pregunta disparadora:
+
+¿Qué pasa si alguien ejecuta el procedimiento 10.000 veces por segundo?
+¿Querés proteger la BD de abuso/DoS?
+Pista de mejora:
+Implementar un límite de consultas por usuario/IP:
+
+sql
+Copy
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro_v4(
+  IN p_dominio VARCHAR(10),
+  IN p_usuario VARCHAR(100)
+)
+BEGIN
+  DECLARE v_consultas_recientes INT;
+  
+  -- Contar consultas del usuario en el último minuto
+  SELECT COUNT(*) INTO v_consultas_recientes
+  FROM auditoria_busquedas
+  WHERE usuario = p_usuario
+    AND fecha_hora >= DATE_SUB(NOW(), INTERVAL 1 MINUTE);
+  
+  -- Rechazar si supera el límite (ej: 10 consultas por minuto)
+  IF v_consultas_recientes >= 10 THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Límite de consultas excedido. Intente en 1 minuto.';
+  END IF;
+  
+  -- Validaciones y consulta (igual que antes)...
+END //
+DELIMITER ;
+Ventajas:
+
+Protege contra ataques de fuerza bruta.
+Reduce carga en la BD.
+Pregunta de reflexión:
+
+¿Qué límite es razonable? ¿10 por minuto, 100 por hora? Depende de tu caso de uso.
+Mejora 5: Permisos de usuario (principio de mínimo privilegio)
+Pregunta disparadora:
+
+¿Quién puede ejecutar este procedimiento?
+¿Todos los usuarios de la BD deberían poder hacerlo?
+Pista de mejora:
+Crear usuarios con permisos específicos:
+
+sql
+Copy
+-- Usuario solo para consultas (sin permisos de escritura)
+CREATE USER 'app_consultas'@'localhost' IDENTIFIED BY 'password_seguro';
+
+-- Solo puede ejecutar el procedimiento, NO acceder directamente a las tablas
+GRANT EXECUTE ON PROCEDURE mi_bd.buscar_vehiculo_seguro_v4 TO 'app_consultas'@'localhost';
+
+-- NO dar estos permisos:
+-- GRANT SELECT ON mi_bd.vehiculos TO 'app_consultas'@'localhost';  -- ❌
+Ventajas:
+
+Aunque haya inyección SQL en otro lado, el usuario no puede hacer DROP TABLE ni UPDATE.
+Centralizás la lógica de acceso en procedimientos (más fácil de auditar).
+Procedimiento final con todas las mejoras
+sql
+Copy
+-- Tabla de auditoría
+CREATE TABLE IF NOT EXISTS auditoria_busquedas (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  usuario VARCHAR(100),
+  dominio_buscado VARCHAR(10),
+  fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ip_origen VARCHAR(45),
+  resultado_encontrado BOOLEAN,
+  INDEX idx_usuario_fecha (usuario, fecha_hora)
+);
+
+-- Vista con datos públicos
+CREATE OR REPLACE VIEW vehiculos_publicos AS
+SELECT dominio, marca, modelo, anio
+FROM vehiculos
+WHERE eliminado = FALSE;
+
+-- Procedimiento seguro completo
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro(
+  IN p_dominio VARCHAR(10),
+  IN p_usuario VARCHAR(100),
+  IN p_ip VARCHAR(45)
+)
+BEGIN
+  DECLARE v_consultas_recientes INT;
+  DECLARE v_encontrado BOOLEAN DEFAULT FALSE;
+  
+  -- ========================================================================
+  -- VALIDACIÓN 1: Entrada no vacía
+  -- ========================================================================
+  IF p_dominio IS NULL OR TRIM(p_dominio) = '' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio no puede estar vacío';
+  END IF;
+  
+  -- ========================================================================
+  -- VALIDACIÓN 2: Caracteres sospechosos
+  -- ========================================================================
+  IF p_dominio REGEXP '[";\\-\\-]' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio contiene caracteres no permitidos';
+  END IF;
+  
+  -- ========================================================================
+  -- VALIDACIÓN 3: Formato esperado (ajustar según tu país)
+  -- ========================================================================
+  IF p_dominio NOT REGEXP '^[A-Z0-9]{5,10}$' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Formato de dominio inválido';
+  END IF;
+  
+  -- ========================================================================
+  -- VALIDACIÓN 4: Rate limiting (máximo 10 consultas por minuto)
+  -- ========================================================================
+  SELECT COUNT(*) INTO v_consultas_recientes
+  FROM auditoria_busquedas
+  WHERE usuario = p_usuario
+    AND fecha_hora >= DATE_SUB(NOW(), INTERVAL 1 MINUTE);
+  
+  IF v_consultas_recientes >= 10 THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Límite de consultas excedido (máx 10/min)';
+  END IF;
+  
+  -- ========================================================================
+  -- CONSULTA SEGURA (usando vista y parámetros preparados)
+  -- ========================================================================
+  SELECT *
+  FROM vehiculos_publicos
+  WHERE dominio = p_dominio;
+  
+  -- Verificar si se encontró resultado
+  IF FOUND_ROWS() > 0 THEN
+    SET v_encontrado = TRUE;
+  END IF;
+  
+  -- ========================================================================
+  -- AUDITORÍA: Registrar la búsqueda
+  -- ========================================================================
+  INSERT INTO auditoria_busquedas (usuario, dominio_buscado, ip_origen, resultado_encontrado)
+  VALUES (p_usuario, p_dominio, p_ip, v_encontrado);
+  
+END //
+DELIMITER ;
+
+-- ============================================================================
+-- PRUEBAS
+-- ============================================================================
+
+-- Prueba legítima
+CALL buscar_vehiculo_seguro('AB110LG', 'juan.perez', '192.168.1.100');
+
+-- Prueba con inyección (rechazada por validación de caracteres)
+CALL buscar_vehiculo_seguro("AB110LG' OR '1'='1", 'atacante', '10.0.0.1');
+-- Error: El dominio contiene caracteres no permitidos
+
+-- Prueba de rate limiting (ejecutar 11 veces seguidas)
+-- La 11va debería fallar con: Error: Límite de consultas excedido
+
+-- Ver auditoría
+SELECT * FROM auditoria_busquedas ORDER BY fecha_hora DESC LIMIT 10;
+Resumen de capas de seguridad
+Capa	Protección	¿Cuándo aplica?
+Parámetros preparados	✅ Inyección SQL	Siempre (ya lo tenías)
+Validación de entrada	✅ Datos malformados	Siempre
+Vista con datos públicos	✅ Exposición de columnas sensibles	Si hay datos confidenciales
+Auditoría	✅ Trazabilidad y detección de ataques	Producción
+Rate limiting	✅ Fuerza bruta / DoS	APIs públicas
+Permisos de usuario	✅ Escalada de privilegios	Siempre
+Preguntas finales de reflexión
+¿Cuál de estas capas es más importante para tu caso de uso?
+¿Cómo detectarías un ataque analizando la tabla auditoria_busquedas? Pista: GROUP BY ip_origen, HOUR(fecha_hora) HAVING COUNT(*) > 100
+¿Qué harías si un usuario legítimo necesita hacer más de 10 consultas por minuto? Pista: roles/permisos diferenciados.
+¿Preferís validar el formato del dominio en el procedimiento o con un CHECK constraint en la tabla? Ambos tienen ventajas.
+¿Querés profundizar en alguna de estas capas o analizar otro procedimiento? 🔒

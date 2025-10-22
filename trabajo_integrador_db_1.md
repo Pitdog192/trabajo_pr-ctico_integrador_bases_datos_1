@@ -307,6 +307,95 @@ GROUP BY marca;
 ### Prueba contra insersión maliciosa
 ![alt text](image-33.png)
 
+### Se mejoró el stored procedure con IA
+``` CREATE TABLE IF NOT EXISTS auditoria_busquedas (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  usuario VARCHAR(100),
+  dominio_buscado VARCHAR(10),
+  fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ip_origen VARCHAR(45),
+  resultado_encontrado BOOLEAN,
+  INDEX idx_usuario_fecha (usuario, fecha_hora)
+);
 
+-- Vista con datos públicos
+CREATE OR REPLACE VIEW vehiculos_publicos AS
+SELECT dominio, marca, modelo, anio
+FROM vehiculos
+WHERE eliminado = FALSE;
 
+DELIMITER //
+CREATE PROCEDURE buscar_vehiculo_seguro(
+  IN p_dominio VARCHAR(10), 
+  IN p_usuario VARCHAR(100), 
+  IN p_ip VARCHAR(45)
+)
+BEGIN
+  DECLARE v_consultas_recientes INT;
+  DECLARE v_encontrado BOOLEAN DEFAULT FALSE;
+  DECLARE v_count INT DEFAULT 0;
+  
+  -- VALIDACIÓN 1: Entrada no vacía
+  IF p_dominio IS NULL OR TRIM(p_dominio) = '' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio no puede estar vacío';
+  END IF;
+  
+  -- VALIDACIÓN 2: Caracteres sospechosos
+  IF p_dominio REGEXP '[";\\-\\-]' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: El dominio contiene caracteres no permitidos';
+  END IF;
+  
+  -- VALIDACIÓN 3: Formato esperado
+  IF p_dominio NOT REGEXP '^[A-Z0-9]{5,10}$' THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Formato de dominio inválido';
+  END IF;
+  
+  -- VALIDACIÓN 4: Rate limiting
+  SELECT COUNT(*) INTO v_consultas_recientes 
+  FROM auditoria_busquedas 
+  WHERE usuario = p_usuario 
+    AND fecha_hora >= DATE_SUB(NOW(), INTERVAL 1 MINUTE);
+    
+  IF v_consultas_recientes >= 10 THEN
+    SIGNAL SQLSTATE '45000' 
+    SET MESSAGE_TEXT = 'Error: Límite de consultas excedido (máx 10/min)';
+  END IF;
+  
+  -- CONSULTA SEGURA
+  SELECT * FROM vehiculos_publicos WHERE dominio = p_dominio;
+  
+  -- Verificar si se encontró resultado (reemplazando FOUND_ROWS())
+  SELECT COUNT(*) INTO v_count 
+  FROM vehiculos_publicos 
+  WHERE dominio = p_dominio;
+  
+  IF v_count > 0 THEN
+    SET v_encontrado = TRUE;
+  END IF;
+  
+  -- AUDITORÍA
+  INSERT INTO auditoria_busquedas (usuario, dominio_buscado, ip_origen, resultado_encontrado)
+  VALUES (p_usuario, p_dominio, p_ip, v_encontrado);
+END //
+DELIMITER ;
 
+-- Prueba legítima
+CALL buscar_vehiculo_seguro('AB110LG', 'juan.perez', '192.168.1.100');
+
+-- Prueba con inyección (rechazada por validación de caracteres)
+CALL buscar_vehiculo_seguro("AB110LG' OR '1'='1", 'atacante', '10.0.0.1');
+```
+
+### Prueba válida 
+![alt text](image-35.png)
+
+### Prueba válida pero se excede el límite de consultas
+![alt text](image-36.png)
+
+### Prueba de inyección 
+![alt text](image-37.png)
+
+## Etapa 5
