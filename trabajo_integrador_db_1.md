@@ -145,3 +145,5 @@ WHERE v.eliminado = FALSE
   AND (s.eliminado = FALSE OR s.eliminado IS NULL);
 
 #### Se creó una vista tipo reporte, sería la más usada por un usuario administrativo o empleado de aseguradora que necesita ver qué seguro tiene cada auto. Evita tener que hacer JOIN manuales en cada consulta. Sirve de base para generar reportes, por ejemplo: seguros próximos a vencer, vehículos sin seguro, vencimientos por aseguradora.
+
+
