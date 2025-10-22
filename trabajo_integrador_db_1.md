@@ -278,3 +278,35 @@ GROUP BY marca;
 
 ## Etapa 4
 
+### Creación de usuario y acceso a vistas
+![alt text](image-23.png)
+
+### Usuario creado SIN acceso a vista con datos sensibles
+![alt text](image-28.png)
+
+### Usuario creado CON acceso a vistas sin datos sensibles
+![alt text](image-30.png)
+
+### Creación de vistas seguras
+![alt text](image-24.png)
+![alt text](image-25.png)
+
+### Prueba de integridad por PRIMARY KEY
+![alt text](image-26.png)
+
+### Prueba de integridad por valor fuera de rango
+![alt text](image-27.png)
+
+### Para la prueba anti inyección se creó el siguiente PROCEDURE
+![alt text](image-34.png)
+> El procedimiento buscar_vehiculo_por_dominio recibe un parámetro p_dominio de tipo VARCHAR(10) y lo utiliza directamente en la cláusula WHERE sin concatenación. Esto previene inyección SQL porque el valor se trata como un dato literal, no como código ejecutable. En la prueba maliciosa "AB110LG' OR '1'='1", MySQL rechaza la entrada por exceder los 10 caracteres permitidos (Error 1406) como se puede ver en la sección Prueba contra insesión maliciosa, bloqueando el ataque antes de ejecutar la consulta. Incluso si la entrada cupiera en 10 caracteres, el procedimiento buscaría literalmente ese texto como dominio, sin ejecutar la condición inyectada.
+
+### Prueba de insersión legitima
+![alt text](image-32.png)
+
+### Prueba contra insersión maliciosa
+![alt text](image-33.png)
+
+
+
+
