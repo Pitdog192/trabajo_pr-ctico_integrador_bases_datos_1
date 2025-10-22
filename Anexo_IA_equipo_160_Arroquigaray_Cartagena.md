@@ -1304,5 +1304,379 @@ Preguntas de reflexión
 ¿Cómo verificarías que la proporción 70/30 se mantiene en cada ejecución?
 → Con la última query de validación (debe dar ~70% con seguro, ~30% sin seguro).
 
+Se tiene esta consulta, SELECT 
+    v.marca,
+    s.cobertura,
+    COUNT(*) AS cantidad_vehiculos,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY v.marca), 2) AS porcentaje
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE 
+  AND s.eliminado = FALSE
+GROUP BY v.marca, s.cobertura
+HAVING COUNT(*) > 1000
+ORDER BY v.marca, cantidad_vehiculos DESC; cómo podríamos optimizarla o utilizar mejores validaciones?
+Relevant Posts
+0
 
+No tweets found
+
+
+RouteLLM
+Routing to Claude Sonnet 4.5
+¡Excelente consulta para analizar! Te guío con preguntas y pistas para que vos mismo identifiques mejoras. Vamos paso a paso:
+
+Análisis de la consulta actual
+¿Qué hace?
+Cuenta vehículos activos por combinación de marca + cobertura.
+Calcula el porcentaje de cada cobertura dentro de cada marca.
+Filtra combinaciones con más de 1000 vehículos.
+¿Está bien construida?
+✅ Sí, es correcta. Pero podemos mejorar performance, legibilidad y validaciones.
+
+Pista 1: Performance - Índices
+Pregunta disparadora:
+¿Qué columnas está usando la consulta en WHERE, JOIN y GROUP BY?
+¿Tenés índices en esas columnas?
+Análisis:
+Tu consulta usa:
+
+v.id_seguro (JOIN) → Ya tiene índice (es UNIQUE y FK)
+v.eliminado (WHERE) → ⚠️ Probablemente NO tiene índice
+s.eliminado (WHERE) → ⚠️ Probablemente NO tiene índice
+v.marca (GROUP BY) → ⚠️ Probablemente NO tiene índice
+s.cobertura (GROUP BY) → ⚠️ Probablemente NO tiene índice
+Pista de mejora:
+Si esta consulta se ejecuta frecuentemente, considerá índices compuestos:
+
+sql
+Copy
+-- Para vehiculos: filtra por eliminado y agrupa por marca
+CREATE INDEX idx_vehiculos_eliminado_marca ON vehiculos(eliminado, marca);
+
+-- Para seguro_vehicular: filtra por eliminado y agrupa por cobertura
+CREATE INDEX idx_seguros_eliminado_cobertura ON seguro_vehicular(eliminado, cobertura);
+Pregunta de reflexión:
+
+¿Por qué ponemos eliminado primero en el índice? → Porque filtra primero (reduce el conjunto) antes de agrupar.
+Pista 2: Validación del filtro HAVING COUNT(*) > 1000
+Pregunta disparadora:
+¿Qué pasa si ninguna combinación marca+cobertura supera 1000 vehículos?
+¿La consulta devuelve filas vacías o un mensaje claro?
+Problema:
+Si no hay resultados, el usuario no sabe si:
+
+a) No hay datos.
+b) Ninguna combinación supera el umbral.
+Pista de mejora:
+Agregar una validación previa o un UNION con mensaje:
+
+sql
+Copy
+-- Opción A: Validación previa (cuenta total antes de filtrar)
+SELECT 
+    CASE 
+        WHEN COUNT(*) = 0 THEN 'No hay combinaciones que superen 1000 vehículos'
+        ELSE CONCAT(COUNT(*), ' combinaciones encontradas')
+    END AS resumen
+FROM (
+    SELECT v.marca, s.cobertura, COUNT(*) AS cnt
+    FROM vehiculos v
+    INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+    WHERE v.eliminado = FALSE AND s.eliminado = FALSE
+    GROUP BY v.marca, s.cobertura
+    HAVING cnt > 1000
+) sub;
+Pregunta de reflexión:
+
+¿Preferís una validación separada o integrada en la consulta principal?
+Pista 3: Legibilidad - CTE (Common Table Expression)
+Pregunta disparadora:
+¿La consulta es fácil de leer y modificar?
+Si tuvieras que agregar más filtros o cálculos, ¿sería claro dónde hacerlo?
+Pista de mejora:
+Usar WITH (CTE) para separar lógica en "pasos":
+
+sql
+Copy
+-- Paso 1: Filtrar vehículos y seguros activos
+WITH vehiculos_activos AS (
+    SELECT v.id, v.marca, v.id_seguro
+    FROM vehiculos v
+    WHERE v.eliminado = FALSE
+      AND v.id_seguro IS NOT NULL  -- Solo vehículos con seguro
+),
+seguros_activos AS (
+    SELECT s.id, s.cobertura
+    FROM seguro_vehicular s
+    WHERE s.eliminado = FALSE
+),
+-- Paso 2: Combinar y contar
+conteo_por_marca_cobertura AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos
+    FROM vehiculos_activos v
+    INNER JOIN seguros_activos s ON v.id_seguro = s.id
+    GROUP BY v.marca, s.cobertura
+)
+-- Paso 3: Calcular porcentajes y filtrar
+SELECT 
+    marca,
+    cobertura,
+    cantidad_vehiculos,
+    ROUND(cantidad_vehiculos * 100.0 / SUM(cantidad_vehiculos) OVER (PARTITION BY marca), 2) AS porcentaje
+FROM conteo_por_marca_cobertura
+WHERE cantidad_vehiculos > 1000
+ORDER BY marca, cantidad_vehiculos DESC;
+Ventajas:
+
+Más fácil de debuggear (podés ejecutar cada CTE por separado).
+Más fácil de extender (agregar filtros, joins, etc.).
+Pregunta de reflexión:
+
+¿Qué CTE ejecutarías primero para verificar que los filtros funcionan correctamente?
+Pista 4: Validación de datos - ¿Y los vehículos SIN seguro?
+Pregunta disparadora:
+Tu consulta usa INNER JOIN, ¿qué pasa con los vehículos que tienen id_seguro = NULL?
+¿Querés incluirlos en el análisis o excluirlos?
+Análisis:
+INNER JOIN excluye vehículos sin seguro (correcto si solo te interesan los asegurados).
+Pero si querés validar que no haya inconsistencias, podrías agregar:
+sql
+Copy
+-- Validación: ¿Hay vehículos activos sin seguro que deberían tenerlo?
+SELECT 'Vehículos activos sin seguro' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos
+WHERE eliminado = FALSE 
+  AND id_seguro IS NULL;
+Pregunta de reflexión:
+
+Según tu modelo de negocio, ¿es válido que un vehículo activo no tenga seguro? Si no, ¿deberías agregar un CHECK constraint?
+Pista 5: Validación de integridad - ¿Y si hay FKs rotas?
+Pregunta disparadora:
+¿Confiás 100% en que todas las FKs son válidas?
+¿Qué pasa si hay un id_seguro que apunta a un seguro inexistente o eliminado?
+Pista de mejora:
+Agregar validación antes de la consulta principal:
+
+sql
+Copy
+-- Validación: ¿Hay FKs que apuntan a seguros inexistentes?
+SELECT 'FKs inválidas' AS problema, COUNT(*) AS cantidad
+FROM vehiculos v
+WHERE v.id_seguro IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM seguro_vehicular s WHERE s.id = v.id_seguro
+  );
+
+-- Validación: ¿Hay vehículos activos con seguros eliminados?
+SELECT 'Vehículos activos con seguros eliminados' AS problema, COUNT(*) AS cantidad
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE 
+  AND s.eliminado = TRUE;
+Pregunta de reflexión:
+
+Si encontrás vehículos activos con seguros eliminados, ¿es un error de datos o una regla de negocio válida?
+Pista 6: Performance - Materializar resultados frecuentes
+Pregunta disparadora:
+¿Esta consulta se ejecuta muchas veces al día?
+¿Los datos cambian constantemente o son relativamente estáticos?
+Pista de mejora:
+Si la consulta es pesada y los datos no cambian mucho, considerá:
+
+Opción A: Vista materializada (si tu motor lo soporta, ej. PostgreSQL):
+
+sql
+Copy
+CREATE MATERIALIZED VIEW mv_vehiculos_por_marca_cobertura AS
+SELECT 
+    v.marca,
+    s.cobertura,
+    COUNT(*) AS cantidad_vehiculos
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE AND s.eliminado = FALSE
+GROUP BY v.marca, s.cobertura;
+
+-- Refrescar periódicamente
+REFRESH MATERIALIZED VIEW mv_vehiculos_por_marca_cobertura;
+Opción B: Tabla de resumen (si no tenés vistas materializadas):
+
+sql
+Copy
+CREATE TABLE resumen_marca_cobertura (
+    marca VARCHAR(50),
+    cobertura VARCHAR(20),
+    cantidad_vehiculos INT,
+    fecha_actualizacion TIMESTAMP,
+    PRIMARY KEY (marca, cobertura)
+);
+
+-- Actualizar con un job periódico
+TRUNCATE resumen_marca_cobertura;
+INSERT INTO resumen_marca_cobertura (marca, cobertura, cantidad_vehiculos, fecha_actualizacion)
+SELECT v.marca, s.cobertura, COUNT(*), NOW()
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE AND s.eliminado = FALSE
+GROUP BY v.marca, s.cobertura;
+Pregunta de reflexión:
+
+¿Cuál es el trade-off entre performance y "frescura" de los datos?
+Pista 7: Validación de lógica - ¿El porcentaje suma 100%?
+Pregunta disparadora:
+Para cada marca, ¿la suma de porcentajes debería dar 100%?
+¿Cómo verificás que el cálculo es correcto?
+Pista de mejora:
+Agregar validación al final:
+
+sql
+Copy
+-- Validación: ¿Los porcentajes por marca suman ~100%?
+WITH resultado AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos,
+        ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY v.marca), 2) AS porcentaje
+    FROM vehiculos v
+    INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+    WHERE v.eliminado = FALSE AND s.eliminado = FALSE
+    GROUP BY v.marca, s.cobertura
+)
+SELECT 
+    marca,
+    SUM(porcentaje) AS suma_porcentajes,
+    CASE 
+        WHEN ABS(SUM(porcentaje) - 100) < 0.1 THEN '✅ OK'
+        ELSE '⚠️ ERROR: no suma 100%'
+    END AS validacion
+FROM resultado
+GROUP BY marca;
+Pregunta de reflexión:
+
+¿Por qué usamos ABS(... - 100) < 0.1 en lugar de = 100? → Por errores de redondeo.
+Consulta optimizada final (con todas las mejoras)
+sql
+Copy
+-- ============================================================================
+-- CONSULTA OPTIMIZADA: Vehículos por marca y cobertura
+-- ============================================================================
+
+-- PASO 0: Validaciones previas (ejecutar primero para detectar problemas)
+-- -------------------------------------------------------------------------
+
+-- Validación 1: FKs inválidas
+SELECT 'FKs inválidas' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos v
+WHERE v.id_seguro IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM seguro_vehicular s WHERE s.id = v.id_seguro);
+
+-- Validación 2: Vehículos activos con seguros eliminados
+SELECT 'Vehículos activos con seguros eliminados' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE AND s.eliminado = TRUE;
+
+-- PASO 1: Consulta principal con CTEs (más legible)
+-- -------------------------------------------------------------------------
+
+WITH vehiculos_activos AS (
+    SELECT v.id, v.marca, v.id_seguro
+    FROM vehiculos v
+    WHERE v.eliminado = FALSE
+      AND v.id_seguro IS NOT NULL
+),
+seguros_activos AS (
+    SELECT s.id, s.cobertura
+    FROM seguro_vehicular s
+    WHERE s.eliminado = FALSE
+),
+conteo_por_marca_cobertura AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos
+    FROM vehiculos_activos v
+    INNER JOIN seguros_activos s ON v.id_seguro = s.id
+    GROUP BY v.marca, s.cobertura
+),
+resultado_con_porcentajes AS (
+    SELECT 
+        marca,
+        cobertura,
+        cantidad_vehiculos,
+        ROUND(cantidad_vehiculos * 100.0 / SUM(cantidad_vehiculos) OVER (PARTITION BY marca), 2) AS porcentaje
+    FROM conteo_por_marca_cobertura
+)
+SELECT *
+FROM resultado_con_porcentajes
+WHERE cantidad_vehiculos > 1000
+ORDER BY marca, cantidad_vehiculos DESC;
+
+-- PASO 2: Validación de resultados (verificar que porcentajes suman 100%)
+-- -------------------------------------------------------------------------
+
+WITH vehiculos_activos AS (
+    SELECT v.id, v.marca, v.id_seguro
+    FROM vehiculos v
+    WHERE v.eliminado = FALSE AND v.id_seguro IS NOT NULL
+),
+seguros_activos AS (
+    SELECT s.id, s.cobertura
+    FROM seguro_vehicular s
+    WHERE s.eliminado = FALSE
+),
+conteo_por_marca_cobertura AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos
+    FROM vehiculos_activos v
+    INNER JOIN seguros_activos s ON v.id_seguro = s.id
+    GROUP BY v.marca, s.cobertura
+),
+resultado_con_porcentajes AS (
+    SELECT 
+        marca,
+        cobertura,
+        cantidad_vehiculos,
+        ROUND(cantidad_vehiculos * 100.0 / SUM(cantidad_vehiculos) OVER (PARTITION BY marca), 2) AS porcentaje
+    FROM conteo_por_marca_cobertura
+)
+SELECT 
+    marca,
+    SUM(porcentaje) AS suma_porcentajes,
+    CASE 
+        WHEN ABS(SUM(porcentaje) - 100) < 0.1 THEN '✅ Correcto'
+        ELSE '⚠️ Error de redondeo'
+    END AS validacion
+FROM resultado_con_porcentajes
+GROUP BY marca;
+
+-- ============================================================================
+-- ÍNDICES RECOMENDADOS (ejecutar una sola vez)
+-- ============================================================================
+
+CREATE INDEX idx_vehiculos_eliminado_marca ON vehiculos(eliminado, marca);
+CREATE INDEX idx_seguros_eliminado_cobertura ON seguro_vehicular(eliminado, cobertura);
+
+-- ============================================================================
+Resumen de mejoras aplicadas
+Aspecto	Problema original	Mejora aplicada
+Performance	Sin índices en columnas filtradas/agrupadas	Índices compuestos en eliminado + marca/cobertura
+Legibilidad	Consulta monolítica difícil de debuggear	CTEs para separar lógica en pasos
+Validación 1	No detecta FKs inválidas	Query de validación previa
+Validación 2	No detecta vehículos activos con seguros eliminados	Query de validación previa
+Validación 3	No verifica que porcentajes sumen 100%	Query de validación post-resultado
+Robustez	HAVING > 1000 puede dar resultado vacío sin explicación	Validación de conteo antes de filtrar
+Preguntas finales de reflexión
+¿Cuál de las validaciones te parece más importante para tu caso de uso?
+¿Ejecutarías las validaciones siempre o solo en modo "debug"?
+¿Preferís CTEs (más legibles) o la consulta original (más compacta)?
+Si esta consulta tarda más de 5 segundos, ¿qué harías primero: índices, vista materializada, o rediseño del modelo?
+¿Querés profundizar en alguna de estas mejoras o tenés otra consulta para optimizar? 🚀
  
