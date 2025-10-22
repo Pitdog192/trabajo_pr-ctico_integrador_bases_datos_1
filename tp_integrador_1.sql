@@ -58,9 +58,9 @@ VALUES (
   NULL
 );
 
--- PASO 1: Generar una serie de números (1..200000)
 -- ----------------------------------------------------------------------------
-SET SESSION cte_max_recursion_depth = 200000;
+-- PASO 1: Serie de números
+-- ----------------------------------------------------------------------------
 CREATE TEMPORARY TABLE numeros (n INT PRIMARY KEY);
 
 INSERT INTO numeros (n)
@@ -71,18 +71,13 @@ WITH RECURSIVE serie AS (
 )
 SELECT n FROM serie;
 
--- Ahora tenemos una tabla con 200.000 números únicos (1, 2, 3, ..., 200000)
-
 -- ----------------------------------------------------------------------------
 -- PASO 2: Insertar 150.000 seguros
 -- ----------------------------------------------------------------------------
--- Derivamos todos los campos desde la serie de números.
-
 INSERT INTO seguro_vehicular (eliminado, aseguradora, nro_poliza, cobertura, vencimiento)
 SELECT
-    FALSE AS eliminado,  -- Todos activos (simplificado)
+    FALSE AS eliminado,
     
-    -- Aseguradora: rotamos entre 5 opciones usando MOD
     CASE MOD(n, 5)
         WHEN 0 THEN 'Seguros La Estrella'
         WHEN 1 THEN 'Protección Total SA'
@@ -91,42 +86,39 @@ SELECT
         ELSE 'Seguros Unidos'
     END AS aseguradora,
     
-    -- Nro póliza único: POL-00000001, POL-00000002, etc.
+    -- Nro póliza único CON PREFIJO para reproducibilidad
     CONCAT('POL-', @prefijo, '-', LPAD(n, 8, '0')) AS nro_poliza,
     
-    -- Cobertura: distribución simple con MOD
     CASE MOD(n, 10)
-        WHEN 0 THEN 'TODO_RIESGO'  -- 10%
+        WHEN 0 THEN 'TODO_RIESGO'
         WHEN 1 THEN 'TODO_RIESGO'
-        WHEN 2 THEN 'TERCEROS'     -- 30%
+        WHEN 2 THEN 'TERCEROS'
         WHEN 3 THEN 'TERCEROS'
         WHEN 4 THEN 'TERCEROS'
-        ELSE 'RC'                  -- 60%
+        ELSE 'RC'
     END AS cobertura,
     
-    -- Vencimiento: distribuimos en próximos 2 años
     DATE_ADD(CURDATE(), INTERVAL MOD(n, 730) DAY) AS vencimiento
 
 FROM numeros
-WHERE n <= 200000;  -- Solo 150k seguros
+WHERE n <= 150000;
 
 -- ----------------------------------------------------------------------------
--- PASO 3: Insertar 200.000 vehículos (sin seguro asignado todavía)
+-- PASO 3: Insertar 200.000 vehículos
 -- ----------------------------------------------------------------------------
-
 INSERT INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 SELECT
-    FALSE AS eliminado,  -- Todos activos
-    -- Dominio único: AB001CD, AB002CD, etc.
-    CONCAT(
-        CHAR(65 + MOD(n, 26)),              -- Primera letra A-Z
-        CHAR(65 + MOD(FLOOR(n/26), 26)),    -- Segunda letra A-Z
-        LPAD(MOD(n, 1000), 3, '0'),         -- 3 dígitos
-        CHAR(65 + MOD(FLOOR(n/1000), 26)),  -- Tercera letra
-        CHAR(65 + MOD(FLOOR(n/26000), 26))  -- Cuarta letra
-    ) AS dominio,
+    FALSE AS eliminado,
     
-    -- Marca: rotamos entre 5 marcas
+    -- Dominio único CON PREFIJO
+    CONCAT(
+		CHAR(65 + MOD(n, 26)),                    -- 1: A-Z
+		CHAR(65 + MOD(FLOOR(n/26), 26)),          -- 2: A-Z
+		LPAD(MOD(n, 1000), 3, '0'),               -- 3-5: 000-999
+		CHAR(65 + MOD(FLOOR(n/1000), 26)),        -- 6: A-Z
+		CHAR(65 + MOD(FLOOR(n/26000), 26))        -- 7: A-Z
+	) AS dominio,
+    
     CASE MOD(n, 5)
         WHEN 0 THEN 'FORD'
         WHEN 1 THEN 'CHEVROLET'
@@ -135,7 +127,6 @@ SELECT
         ELSE 'FIAT'
     END AS marca,
     
-    -- Modelo: rotamos entre 5 modelos
     CASE MOD(n, 5)
         WHEN 0 THEN 'FOCUS'
         WHEN 1 THEN 'CRUZE'
@@ -144,48 +135,74 @@ SELECT
         ELSE 'CRONOS'
     END AS modelo,
     
-    -- Año: entre 2010 y 2024
     2010 + MOD(n, 15) AS anio,
     
-    -- Nro chasis único: VIN00000000000001, etc.
+    -- Nro chasis único CON PREFIJO
     CONCAT('VIN', @prefijo, LPAD(n, 8, '0')) AS nro_chasis,
     
-    NULL AS id_seguro  -- Lo asignamos después
+    NULL AS id_seguro
 
 FROM numeros;
 
 -- ----------------------------------------------------------------------------
--- PASO 4: Asignar seguros a 70% de vehículos (140.000)
+-- PASO 4: Asignar seguros (emparejamiento robusto con ROW_NUMBER)
 -- ----------------------------------------------------------------------------
--- Emparejamos los primeros 140k vehículos con los primeros 140k seguros.
+-- Garantiza 1:1 independiente de IDs físicos
 
 UPDATE vehiculos v
 JOIN (
+    -- Enumeramos los primeros 140k vehículos
     SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
     FROM vehiculos
-    WHERE id <= 200000
+    ORDER BY id
+    LIMIT 140000
 ) v_num ON v.id = v_num.id
 JOIN (
+    -- Enumeramos los primeros 140k seguros
     SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
     FROM seguro_vehicular
-    LIMIT 200000
+    ORDER BY id
+    LIMIT 140000
 ) s_num ON v_num.rn = s_num.rn
 SET v.id_seguro = s_num.id;
 
--- Conteo total
-SELECT 'Vehículos' AS tabla, COUNT(*) AS total FROM vehiculos
-UNION ALL
-SELECT 'Seguros', COUNT(*) FROM seguro_vehicular
-UNION ALL
-SELECT 'Vehículos con seguro', COUNT(*) FROM vehiculos WHERE id_seguro IS NOT NULL;
+-- 1. Integridad referencial: ¿Hay FKs inválidas? (debe ser 0)
+SELECT 'FKs inválidas' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos v
+WHERE v.id_seguro IS NOT NULL 
+  AND NOT EXISTS (SELECT 1 FROM seguro_vehicular s WHERE s.id = v.id_seguro);
 
--- Verificar que no hay duplicados en dominio
-SELECT COUNT(*) AS dominios_duplicados
-FROM (SELECT dominio FROM vehiculos GROUP BY dominio HAVING COUNT(*) > 1) dup;
+-- Cardinalidad 1:1: ¿Hay seguros reutilizados? (debe ser 0)
+SELECT 'Seguros reutilizados (viola 1:1)' AS validacion, COUNT(*) AS cantidad
+FROM (
+    SELECT id_seguro 
+    FROM vehiculos 
+    WHERE id_seguro IS NOT NULL
+    GROUP BY id_seguro 
+    HAVING COUNT(*) > 1
+) dup;
 
--- Verificar que no hay duplicados en nro_poliza
-SELECT COUNT(*) AS polizas_duplicadas
-FROM (SELECT nro_poliza FROM seguro_vehicular GROUP BY nro_poliza HAVING COUNT(*) > 1) dup;
+-- Reproducibilidad: Conteos y proporciones
+SELECT 'Total vehículos' AS metrica, COUNT(*) AS valor FROM vehiculos
+UNION ALL
+SELECT 'Total seguros', COUNT(*) FROM seguro_vehicular
+UNION ALL
+SELECT 'Vehículos con seguro', COUNT(*) FROM vehiculos WHERE id_seguro IS NOT NULL
+UNION ALL
+SELECT 'Proporción con seguro (%)', 
+       ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM vehiculos), 2)
+FROM vehiculos WHERE id_seguro IS NOT NULL;
+
+-- Distribución de coberturas
+SELECT cobertura, COUNT(*) AS cantidad, 
+       ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM seguro_vehicular), 2) AS porcentaje
+FROM seguro_vehicular
+GROUP BY cobertura
+ORDER BY cantidad DESC;
+
+-- ============================================================================
+-- FIN
+-- ============================================================================
 
 SHOW INDEX FROM vehiculos;
 SHOW INDEX FROM seguro_vehicular;
@@ -235,6 +252,104 @@ WHERE v.eliminado = FALSE
 GROUP BY v.marca, s.cobertura
 HAVING COUNT(*) > 1000
 ORDER BY v.marca, cantidad_vehiculos DESC;
+
+-- CONSULTA OPTIMIZADA POR IA
+-- Indices para consulta optimizada por IA
+-- Para vehiculos: filtra por eliminado y agrupa por marca
+CREATE INDEX idx_vehiculos_eliminado_marca ON vehiculos(eliminado, marca);
+-- Para seguro_vehicular: filtra por eliminado y agrupa por cobertura
+CREATE INDEX idx_seguros_eliminado_cobertura ON seguro_vehicular(eliminado, cobertura);
+
+DROP INDEX idx_vehiculos_eliminado_marca ON vehiculos;
+DROP INDEX idx_seguros_eliminado_cobertura ON seguro_vehicular;
+
+-- Validación 1: FKs inválidas
+SELECT 'FKs inválidas' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos v
+WHERE v.id_seguro IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM seguro_vehicular s WHERE s.id = v.id_seguro);
+
+-- Validación 2: Vehículos activos con seguros eliminados
+SELECT 'Vehículos activos con seguros eliminados' AS validacion, COUNT(*) AS cantidad
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE AND s.eliminado = TRUE;
+
+-- PASO 1: Consulta principal con CTEs (más legible)
+-- -------------------------------------------------------------------------
+
+WITH vehiculos_activos AS (
+    SELECT v.id, v.marca, v.id_seguro
+    FROM vehiculos v
+    WHERE v.eliminado = FALSE
+      AND v.id_seguro IS NOT NULL
+),
+seguros_activos AS (
+    SELECT s.id, s.cobertura
+    FROM seguro_vehicular s
+    WHERE s.eliminado = FALSE
+),
+conteo_por_marca_cobertura AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos
+    FROM vehiculos_activos v
+    INNER JOIN seguros_activos s ON v.id_seguro = s.id
+    GROUP BY v.marca, s.cobertura
+),
+resultado_con_porcentajes AS (
+    SELECT 
+        marca,
+        cobertura,
+        cantidad_vehiculos,
+        ROUND(cantidad_vehiculos * 100.0 / SUM(cantidad_vehiculos) OVER (PARTITION BY marca), 2) AS porcentaje
+    FROM conteo_por_marca_cobertura
+)
+SELECT *
+FROM resultado_con_porcentajes
+WHERE cantidad_vehiculos > 1000
+ORDER BY marca, cantidad_vehiculos DESC;
+
+-- PASO 2: Validación de resultados (verificar que porcentajes suman 100%)
+-- -------------------------------------------------------------------------
+
+WITH vehiculos_activos AS (
+    SELECT v.id, v.marca, v.id_seguro
+    FROM vehiculos v
+    WHERE v.eliminado = FALSE AND v.id_seguro IS NOT NULL
+),
+seguros_activos AS (
+    SELECT s.id, s.cobertura
+    FROM seguro_vehicular s
+    WHERE s.eliminado = FALSE
+),
+conteo_por_marca_cobertura AS (
+    SELECT 
+        v.marca,
+        s.cobertura,
+        COUNT(*) AS cantidad_vehiculos
+    FROM vehiculos_activos v
+    INNER JOIN seguros_activos s ON v.id_seguro = s.id
+    GROUP BY v.marca, s.cobertura
+),
+resultado_con_porcentajes AS (
+    SELECT 
+        marca,
+        cobertura,
+        cantidad_vehiculos,
+        ROUND(cantidad_vehiculos * 100.0 / SUM(cantidad_vehiculos) OVER (PARTITION BY marca), 2) AS porcentaje
+    FROM conteo_por_marca_cobertura
+)
+SELECT 
+    marca,
+    SUM(porcentaje) AS suma_porcentajes,
+    CASE 
+        WHEN ABS(SUM(porcentaje) - 100) < 0.1 THEN '✅ Correcto'
+        ELSE '⚠️ Error de redondeo'
+    END AS validacion
+FROM resultado_con_porcentajes
+GROUP BY marca;
 
 -- Consulta 4: Vehículos con mejor cobertura que el promedio de su marca
 SELECT 
