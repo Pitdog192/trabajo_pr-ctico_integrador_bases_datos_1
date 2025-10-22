@@ -54,3 +54,94 @@ Usé una tabla con números del 1 al 200.000 como base, y a partir de esos núme
     - CONCAT(): Para armar textos únicos (como "POL-00000001")
     - UPDATE con JOIN: Para conectar vehículos con seguro
 Primero inserté los seguros porque los vehículos tienen una foreign key (clave foránea) que apunta a los seguros. Si intentaba crear un vehículo con un seguro que no existe, MySQL me daba error.
+
+## Etapa 3
+
+### Consultas JOIN
+-- Consulta 1: Vehículos con información completa de su seguro
+SELECT 
+    v.dominio,
+    v.marca,
+    v.modelo,
+    v.anio,
+    s.aseguradora,
+    s.nro_poliza,
+    s.cobertura,
+    s.vencimiento
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE 
+  AND s.eliminado = FALSE
+ORDER BY v.dominio;
+
+-- Consulta 2: Vehículos con seguros próximos a vencer (30 días)
+SELECT 
+    v.dominio,
+    v.marca,
+    v.modelo,
+    s.aseguradora,
+    s.nro_poliza,
+    s.vencimiento,
+    DATEDIFF(s.vencimiento, CURDATE()) AS dias_para_vencer
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE s.vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+  AND v.eliminado = FALSE
+  AND s.eliminado = FALSE
+ORDER BY s.vencimiento ASC;
+
+### Consulta GROUP BY + HAVING
+SELECT 
+    v.marca,
+    s.cobertura,
+    COUNT(*) AS cantidad_vehiculos,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY v.marca), 2) AS porcentaje
+FROM vehiculos v
+INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE 
+  AND s.eliminado = FALSE
+GROUP BY v.marca, s.cobertura
+HAVING COUNT(*) > 1000
+ORDER BY v.marca, cantidad_vehiculos DESC;
+
+### Subconsulta
+SELECT 
+    v.dominio,
+    v.marca,
+    v.modelo,
+    v.anio,
+    promedio.anio_promedio
+FROM vehiculos v
+INNER JOIN (
+    SELECT 
+        marca,
+        AVG(anio) AS anio_promedio
+    FROM vehiculos
+    WHERE eliminado = FALSE
+    GROUP BY marca
+) promedio ON v.marca = promedio.marca
+WHERE v.anio > promedio.anio_promedio
+  AND v.eliminado = FALSE
+ORDER BY v.marca, v.anio DESC;
+
+### Script creación de vista
+CREATE OR REPLACE VIEW vista_vehiculos_con_seguro AS
+SELECT 
+    v.id AS id_vehiculo,
+    v.dominio,
+    v.marca,
+    v.modelo,
+    v.anio,
+    v.nro_chasis,
+    s.id AS id_seguro,
+    s.aseguradora,
+    s.nro_poliza,
+    s.cobertura,
+    s.vencimiento,
+    DATEDIFF(s.vencimiento, CURDATE()) AS dias_para_vencer
+FROM vehiculos v
+LEFT JOIN seguro_vehicular s ON v.id_seguro = s.id
+WHERE v.eliminado = FALSE
+  AND (s.eliminado = FALSE OR s.eliminado IS NULL);
+
+#### Se creó una vista tipo reporte, sería la más usada por un usuario administrativo o empleado de aseguradora que necesita ver qué seguro tiene cada auto. Evita tener que hacer JOIN manuales en cada consulta. Sirve de base para generar reportes, por ejemplo: seguros próximos a vencer, vehículos sin seguro, vencimientos por aseguradora.
