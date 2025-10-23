@@ -1,28 +1,39 @@
+USE trabajo_integrador_bases_datos_1;
+-- --------------------------------------
+-- Creación de usuario y asignación de derechos
+-- Se crea el usuario "secure_user"
 CREATE USER 'secure_user'@'localhost' IDENTIFIED BY 'secure_user';
 
+-- Se le otorgan derechos de lectura a la vista vista_vehiculos_basicos
 GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_vehiculos_basicos TO 'secure_user'@'localhost';
+
+-- Se le otorgan derechos de lectura a la vista vista_seguro_resumido
 GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_seguro_resumido TO 'secure_user'@'localhost';
 
-FLUSH PRIVILEGES; -- instrucción en bases de datos como MySQL que recarga las tablas de permisos en memoria, haciendo que los cambios realizados directamente en las tablas de permisos sean efectivos
+FLUSH PRIVILEGES;-- instrucción en bases de datos como MySQL que recarga las tablas de permisos en memoria, haciendo que los cambios realizados directamente en las tablas de permisos sean efectivos
 
--- Primer vista sin datos sensibles, se podría usar como estadistica de inventario o flota, reportes comerciales de marca sin exponer datos criticos de cada vehículo
+-- -----------------------------------------------------
+-- Creación de vistas
+-- Vista para ver información básica de los vehículos, con una cateroria por antiguedad.
 CREATE OR REPLACE VIEW vista_vehiculos_basicos AS
-SELECT 
-    v.dominio,
-    v.marca,
-    v.modelo,
-    v.anio,
-    CASE  	
-        WHEN v.id_seguro IS NOT NULL THEN 'ASEGURADO'
-        ELSE 'SIN SEGURO'
-    END AS estado_seguro,
-    CASE 
-        WHEN v.anio >= YEAR(CURDATE()) - 5 THEN 'NUEVO'
-        WHEN v.anio >= YEAR(CURDATE()) - 10 THEN 'SEMINUEVO'
-        ELSE 'ANTIGUO'
-    END AS categoria_antiguedad
-FROM vehiculos v
-WHERE v.eliminado = FALSE;
+    SELECT 
+        v.dominio,
+        v.marca,
+        v.modelo,
+        v.anio,
+        CASE
+            WHEN v.id_seguro IS NOT NULL THEN 'ASEGURADO'
+            ELSE 'SIN SEGURO'
+        END AS estado_seguro,
+        CASE
+            WHEN v.anio >= YEAR(CURDATE()) - 5 THEN 'NUEVO'
+            WHEN v.anio >= YEAR(CURDATE()) - 10 THEN 'SEMINUEVO'
+            ELSE 'ANTIGUO'
+        END AS categoria_antiguedad
+    FROM
+        vehiculos v
+    WHERE
+        v.eliminado = FALSE;
 
 -- Vista tipo resumen o reporte de agrupamiento por seguros donde se ve la cantidad de polizas asignadas y el promedio de dias a vencer
 CREATE OR REPLACE VIEW vista_seguro_resumido AS
@@ -35,6 +46,7 @@ FROM seguro_vehicular
 WHERE eliminado = FALSE
 GROUP BY aseguradora, cobertura;
 
+-- ----------------------------------
 -- PRUEBAS DE INTEGRIDAD
 INSERT INTO vehiculos (id, eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 VALUES (1, FALSE, 'ZZ999ZZ', 'FIAT', 'UNO', 2020, 'TESTCHASIS', NULL); -- Esto debería fallar por violación de primary key
@@ -43,13 +55,13 @@ VALUES (1, FALSE, 'ZZ999ZZ', 'FIAT', 'UNO', 2020, 'TESTCHASIS', NULL); -- Esto d
 INSERT INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 VALUES (FALSE, 'XY123ZT', 'FORD', 'FOCUS', 1800, 'TESTCHASIS2', NULL); -- debería fallar por año fuera de rango del CHECK
 
-DELIMITER //
+DELIMITER $$ -- Cambia el delimitador de la query ; por $$ 
 CREATE PROCEDURE buscar_vehiculo_por_dominio(IN p_dominio VARCHAR(10))
 BEGIN
   SELECT dominio, marca, modelo, anio
   FROM vehiculos
   WHERE dominio = p_dominio;
-END //
+END $$
 DELIMITER ;
 
 -- Prueba legítima
@@ -88,25 +100,13 @@ BEGIN
   DECLARE v_encontrado BOOLEAN DEFAULT FALSE;
   DECLARE v_count INT DEFAULT 0;
   
-  -- VALIDACIÓN 1: Entrada no vacía
+  -- validación 1: Entrada no vacía
   IF p_dominio IS NULL OR TRIM(p_dominio) = '' THEN
     SIGNAL SQLSTATE '45000' 
     SET MESSAGE_TEXT = 'Error: El dominio no puede estar vacío';
   END IF;
   
-  -- VALIDACIÓN 2: Caracteres sospechosos
-  IF p_dominio REGEXP '[";\\-\\-]' THEN
-    SIGNAL SQLSTATE '45000' 
-    SET MESSAGE_TEXT = 'Error: El dominio contiene caracteres no permitidos';
-  END IF;
-  
-  -- VALIDACIÓN 3: Formato esperado
-  IF p_dominio NOT REGEXP '^[A-Z0-9]{5,10}$' THEN
-    SIGNAL SQLSTATE '45000' 
-    SET MESSAGE_TEXT = 'Error: Formato de dominio inválido';
-  END IF;
-  
-  -- VALIDACIÓN 4: Rate limiting
+  -- validación 2: Rate limiting
   SELECT COUNT(*) INTO v_consultas_recientes 
   FROM auditoria_busquedas 
   WHERE usuario = p_usuario 

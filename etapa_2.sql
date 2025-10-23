@@ -1,8 +1,10 @@
+USE trabajo_integrador_bases_datos_1;
 SET @prefijo = DATE_FORMAT(NOW(), '%Y%m%d%H%i%s');
 
 -- ----------------------------------------------------------------------------
 -- PASO 1: Serie de números
 -- ----------------------------------------------------------------------------
+DROP TEMPORARY TABLE IF EXISTS numeros; 
 CREATE TEMPORARY TABLE numeros (n INT PRIMARY KEY);
 
 INSERT INTO numeros (n)
@@ -16,7 +18,7 @@ SELECT n FROM serie;
 -- ----------------------------------------------------------------------------
 -- PASO 2: Insertar 150.000 seguros
 -- ----------------------------------------------------------------------------
-INSERT INTO seguro_vehicular (eliminado, aseguradora, nro_poliza, cobertura, vencimiento)
+INSERT INTO IGNORE seguro_vehicular (eliminado, aseguradora, nro_poliza, cobertura, vencimiento)
 SELECT
     FALSE AS eliminado,
     
@@ -48,7 +50,7 @@ WHERE n <= 150000;
 -- ----------------------------------------------------------------------------
 -- PASO 3: Insertar 200.000 vehículos
 -- ----------------------------------------------------------------------------
-INSERT INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
+INSERT IGNORE INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 SELECT
     FALSE AS eliminado,
     

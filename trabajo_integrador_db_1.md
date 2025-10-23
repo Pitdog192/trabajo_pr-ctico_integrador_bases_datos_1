@@ -399,3 +399,36 @@ CALL buscar_vehiculo_seguro("AB110LG' OR '1'='1", 'atacante', '10.0.0.1');
 ![alt text](image-37.png)
 
 ## Etapa 5
+
+### Simulación Deadlock
+![alt text](image-39.png)
+![alt text](image-38.png)
+
+> Para simular el deadlock se inició sesión con 2 usuarios distintos, primero se inicia la transacción con ambos usuarios ejecutando START TRANSACTION; luego se ejecuta el primer update
+  con ambos usuarios, cada una toma posesión de un registro, se espera unos segundos y se ejecutan los siguientes update de cada transaction, pero cada registro necesario para realizar la transacción está ocupado por el otro usuario, generando asi el deadklock. 
+
+### Creación del procedure
+![alt text](image-40.png)
+
+### Se prueba con ambos usuarios generando un tiempo de espera artificial para probar deadlock - retry con ambos usuarios
+### Log generado: 
+![alt text](image-41.png)
+
+### Prueba READ COMMITTED, se establece la cantidad en 10 
+![alt text](image-42.png)
+
+### Lectura primer usuario 
+![alt text](image-43.png)
+
+### Ejecución codigo segundo usuario
+![alt text](image-44.png)
+
+### Nueva lectura con primer usuario
+![alt text](image-45.png)
+
+### Para probar REPEATABLE READ se ejectuó el mismo procedimiento pero al realizar la lectura con el primer usuario el resultado no cambió, se siguió viendo el mismo resultado del select
+![alt text](image-46.png)
+
+> Durante las pruebas se evidenció cómo los deadlocks pasan cuando dos transacciones intentan acceder a los mismos recursos, bloqueándose mutuamente. La implementación del procedimiento con retry y backoff demostró ser efectiva para resolver automáticamente estos conflictos sin intervención manual.
+En cuanto a los niveles de aislamiento, READ COMMITTED permite lecturas no repetibles, mostrando cambios de otras transacciones comprometidas durante la misma transacción. Por otro lado, REPEATABLE READ garantiza consistencia en las lecturas dentro de una transacción, manteniendo una clara imagen de los datos al inicio.
+El logging de transacciones nos resultó fundamental para auditar y diagnosticar problemas de concurrencia, permitiendo rastrear intentos fallidos y exitosos. La estrategia de reintentos con espera incremental reduce la probabilidad de deadlocks recurrentes al desincronizar las transacciones conflictivas.

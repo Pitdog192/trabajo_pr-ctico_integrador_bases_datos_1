@@ -1,7 +1,9 @@
+-- ------------------------
+-- Creación de indices para pruebas de rendimiento
 SHOW INDEX FROM vehiculos;
 SHOW INDEX FROM seguro_vehicular;
 
--- Consulta 1: Vehículos con información completa de su seguro
+-- Consulta con JOIN 1: Vehículos con información completa de su seguro
 SELECT 
     v.dominio,
     v.marca,
@@ -11,13 +13,16 @@ SELECT
     s.nro_poliza,
     s.cobertura,
     s.vencimiento
-FROM vehiculos v
-INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
-WHERE v.eliminado = FALSE 
-    AND s.eliminado = FALSE
+FROM
+    vehiculos v
+        INNER JOIN
+    seguro_vehicular s ON v.id_seguro = s.id
+WHERE
+    v.eliminado = FALSE
+        AND s.eliminado = FALSE
 ORDER BY v.dominio;
 
--- Consulta 2: Vehículos con seguros próximos a vencer (30 días)
+-- Consulta con JOIN 2: Vehículos con seguros próximos a vencer (30 días)
 SELECT 
     v.dominio,
     v.marca,
@@ -26,14 +31,15 @@ SELECT
     s.nro_poliza,
     s.vencimiento,
     DATEDIFF(s.vencimiento, CURDATE()) AS dias_para_vencer
-FROM vehiculos v
-INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
-WHERE s.vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-    AND v.eliminado = FALSE
-    AND s.eliminado = FALSE
-ORDER BY s.vencimiento ASC;
-
--- Consulta 3: Distribución de coberturas por marca (solo marcas con +1000 vehículos)
+FROM
+    vehiculos v
+        INNER JOIN
+    seguro_vehicular s ON v.id_seguro = s.id
+WHERE
+    s.vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+        AND v.eliminado = FALSE
+        AND s.eliminado = FALSE
+ORDER BY s.vencimiento ASC Consulta 3: Distribución de coberturas por marca (solo marcas con +1000 vehículos)
 SELECT 
     v.marca,
     s.cobertura,
@@ -47,7 +53,8 @@ GROUP BY v.marca, s.cobertura
 HAVING COUNT(*) > 1000
 ORDER BY v.marca, cantidad_vehiculos DESC;
 
--- CONSULTA OPTIMIZADA POR IA
+-- --------------------------------------------
+-- CONSULTA GROUP BY + HAVING OPTIMIZADA POR IA
 -- Indices para consulta optimizada por IA
 -- Para vehiculos: filtra por eliminado y agrupa por marca
 CREATE INDEX idx_vehiculos_eliminado_marca ON vehiculos(eliminado, marca);
@@ -70,7 +77,6 @@ INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
 WHERE v.eliminado = FALSE AND s.eliminado = TRUE;
 
 -- PASO 1: Consulta principal con CTEs (más legible)
--- -------------------------------------------------------------------------
 
 WITH vehiculos_activos AS (
     SELECT v.id, v.marca, v.id_seguro
@@ -106,7 +112,6 @@ WHERE cantidad_vehiculos > 1000
 ORDER BY marca, cantidad_vehiculos DESC;
 
 -- PASO 2: Validación de resultados (verificar que porcentajes suman 100%)
--- -------------------------------------------------------------------------
 
 WITH vehiculos_activos AS (
     SELECT v.id, v.marca, v.id_seguro
@@ -145,7 +150,7 @@ SELECT
 FROM resultado_con_porcentajes
 GROUP BY marca;
 
--- Consulta 4: Vehículos con mejor cobertura que el promedio de su marca
+-- Consulta con SUBCONSULTA 4: Vehículos con mejor cobertura que el promedio de su marca
 SELECT 
     v.dominio,
     v.marca,
@@ -165,6 +170,8 @@ WHERE v.anio > promedio.anio_promedio
     AND v.eliminado = FALSE
 ORDER BY v.marca, v.anio DESC;
 
+-- -------------------------------------------------------------------------
+-- CREACIÓN VISTA ÚTIL PARA EL SISTEMA, es para ver vehiculo con detalle de su seguro
 CREATE OR REPLACE VIEW vista_vehiculos_con_seguro AS
 SELECT 
     v.id AS id_vehiculo,
