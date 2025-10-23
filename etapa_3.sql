@@ -39,7 +39,7 @@ WHERE
     s.vencimiento BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
         AND v.eliminado = FALSE
         AND s.eliminado = FALSE
-ORDER BY s.vencimiento ASC Consulta 3: Distribución de coberturas por marca (solo marcas con +1000 vehículos)
+ORDER BY s.vencimiento ASC; -- Distribución de coberturas por marca
 SELECT 
     v.marca,
     s.cobertura,
@@ -144,8 +144,8 @@ SELECT
     marca,
     SUM(porcentaje) AS suma_porcentajes,
     CASE 
-        WHEN ABS(SUM(porcentaje) - 100) < 0.1 THEN '✅ Correcto'
-        ELSE '⚠️ Error de redondeo'
+        WHEN ABS(SUM(porcentaje) - 100) < 0.1 THEN 'Correcto'
+        ELSE 'Error de redondeo'
     END AS validacion
 FROM resultado_con_porcentajes
 GROUP BY marca;

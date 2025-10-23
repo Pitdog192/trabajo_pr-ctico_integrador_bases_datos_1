@@ -18,7 +18,7 @@ SELECT n FROM serie;
 -- ----------------------------------------------------------------------------
 -- PASO 2: Insertar 150.000 seguros
 -- ----------------------------------------------------------------------------
-INSERT INTO IGNORE seguro_vehicular (eliminado, aseguradora, nro_poliza, cobertura, vencimiento)
+INSERT INTO seguro_vehicular (eliminado, aseguradora, nro_poliza, cobertura, vencimiento)
 SELECT
     FALSE AS eliminado,
     
@@ -50,7 +50,7 @@ WHERE n <= 150000;
 -- ----------------------------------------------------------------------------
 -- PASO 3: Insertar 200.000 vehículos
 -- ----------------------------------------------------------------------------
-INSERT IGNORE INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
+INSERT INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 SELECT
     FALSE AS eliminado,
     

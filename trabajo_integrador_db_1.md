@@ -1,6 +1,6 @@
 # Trabajo Final Integrador (TFI) - Bases de Datos I 
 
-## Etapa 1 – Modelado y Definición de Constraints
+## Etapa 1 – Modelado y Definición de Constraints ------------------------------------------------------------------------
 
 ### Creación base de datos y tablas
 ![alt text](image.png)
@@ -13,14 +13,21 @@
 ![alt text](image-2.png)
 ![alt text](image-3.png)
 
+#### Segunda inserción válida
+![alt text](image-48.png)
+![alt text](image-49.png)
+
 #### Inserción errónea por anio fuera de rango
 ![alt text](image-4.png)
 ![alt text](image-5.png)
 
+#### Inserción errónea por key duplicada
+![alt text](image-47.png)
+
 ### Demostración DER 
 ![alt text](image-6.png)
 
-## Etapa 2 - Generación y carga de datos masivos con SQL puro
+## Etapa 2 - Generación y carga de datos masivos con SQL puro -------------------------------------------------------------
 
 ### Creación de tablas semilla, se genera una tabla temporal con una secuencia de hasta 200.000 para generar esos registros
 ![alt text](image-7.png)
@@ -57,7 +64,7 @@ Usé una tabla con números del 1 al 200.000 como base, y a partir de esos núme
     - UPDATE con JOIN: Para conectar vehículos con seguro
 Primero inserté los seguros porque los vehículos tienen una foreign key (clave foránea) que apunta a los seguros. Si intentaba crear un vehículo con un seguro que no existe, MySQL me daba error.
 
-## Etapa 3
+## Etapa 3 --------------------------------------------------------------------------------------------------------------------------
 
 ### Consultas JOIN
 > Permite obtener información de los vehículos, mostrando datos ténicos del mismo y del seguro, se utiliza un INNER JOIN para traer 
@@ -121,7 +128,7 @@ ORDER BY v.marca, cantidad_vehiculos DESC;
 #### EXPLAIN SIN INDICES
 ![alt text](image-20.png)
 
-#### 3 tiempos de ejecución de consulta CON indices, mediana: 0.359 sec, hay más demora con indices
+#### 3 tiempos de ejecución de consulta CON indices, mediana: 0.359 sec, hay más demora con indices, la posible causa es que en casi la totalidad de registros esté eliminado = false
 ![alt text](image-18.png)
 
 #### EXPLAIN CON INDICES
@@ -276,7 +283,7 @@ GROUP BY marca;
 #### EXPLAIN CONSULTA
 ![alt text](image-22.png)
 
-## Etapa 4
+## Etapa 4 --------------------------------------------------------------------------------------------------------------------------
 
 ### Creación de usuario y acceso a vistas
 ![alt text](image-23.png)
@@ -398,7 +405,7 @@ CALL buscar_vehiculo_seguro("AB110LG' OR '1'='1", 'atacante', '10.0.0.1');
 ### Prueba de inyección 
 ![alt text](image-37.png)
 
-## Etapa 5
+## Etapa 5 --------------------------------------------------------------------------------------------------------------------------
 
 ### Simulación Deadlock
 ![alt text](image-39.png)

@@ -1,6 +1,7 @@
 # Anexo de inteligencia artificial
 
-## Etapa 1
+## Etapa 1 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Contexto
 Estás interactuando con un estudiante de la materia Base de Datos I de una Tecnicatura
 Superior. El estudiante está resolviendo un Trabajo Práctico sobre modelos entidad–relación
@@ -197,7 +198,8 @@ D) Normalizar marca/modelo con tablas de referencia.
 E) Ajustar anio a un rango relativo al año actual.
 Decime cuál preferís y te paso el “cómo” paso a paso (con el ALTER TABLE correspondiente) y un par de inserts de prueba para validar.
 
-## Etapa 2
+## Etapa 2 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Necesito que me asesores sobre cómo hacer para insertar 200.000 registros en estas 2 tablas, no darme el script directamente pero si detallarme el procedimiento y o paso a paso de cómo debería hacerse CREATE TABLE vehiculos(
 	id int primary key auto_increment, /* Aunque se tengan el dominio y nro_chasis que suelen ser únicos, por causas excepcionales podrían cambiar, por lo tanto se usa el id como identificador único por estabilidad y performance*/ 
@@ -538,18 +540,9 @@ ALTER TABLE vehiculos
 ALTER TABLE seguro_vehicular
 ADD CONSTRAINT chk_seguros_cobertura
 CHECK (cobertura IN ('RC','TERCEROS','TODO_RIESGO')); siguiendo con los mecanismos anteriormente mencionados
-Relevant Posts
-0
 
-No tweets found
-
-
-RouteLLM
-Routing to Claude Sonnet 4.5
 ¡Perfecto! Te armo un script minimalista y funcional con comentarios pedagógicos en cada paso. Seguimos los mecanismos obligatorios y respetamos tus constraints.
 
-sql
-Copy
 -- ============================================================================
 -- SCRIPT DE CARGA MASIVA: 200.000 vehículos + seguros
 -- ============================================================================
@@ -892,8 +885,6 @@ Podrás hacerlo más simple?
 
 ¡Claro! Te armo una versión ultra-simplificada con lo mínimo indispensable:
 
-sql
-Copy
 -- ============================================================================
 -- CARGA MASIVA SIMPLIFICADA: 200.000 vehículos + seguros
 -- ============================================================================
@@ -1051,7 +1042,6 @@ Preguntas de reflexión
 ¿Te sirve así o necesitás simplificar algo más? 🚀
 
 
-
 Es funcional, pero este script cumple con las condiciones dadas: Condiciones de llenado
 • Integridad referencial: todas las FKs deben apuntar a PKs válidas.
 • Cardinalidades del dominio respetadas.
@@ -1092,8 +1082,6 @@ Si por alguna razón los IDs de vehiculos o seguro_vehicular no son correlativos
 Solución robusta:
 Usar ROW_NUMBER() para garantizar emparejamiento 1:1 independiente de los IDs físicos:
 
-sql
-Copy
 -- Emparejamiento robusto con ROW_NUMBER
 UPDATE vehiculos v
 JOIN (
@@ -1304,6 +1292,9 @@ Preguntas de reflexión
 ¿Cómo verificarías que la proporción 70/30 se mantiene en cada ejecución?
 → Con la última query de validación (debe dar ~70% con seguro, ~30% sin seguro).
 
+## Etapa 3 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 Se tiene esta consulta, SELECT 
     v.marca,
     s.cobertura,
@@ -1316,14 +1307,7 @@ WHERE v.eliminado = FALSE
 GROUP BY v.marca, s.cobertura
 HAVING COUNT(*) > 1000
 ORDER BY v.marca, cantidad_vehiculos DESC; cómo podríamos optimizarla o utilizar mejores validaciones?
-Relevant Posts
-0
 
-No tweets found
-
-
-RouteLLM
-Routing to Claude Sonnet 4.5
 ¡Excelente consulta para analizar! Te guío con preguntas y pistas para que vos mismo identifiques mejoras. Vamos paso a paso:
 
 Análisis de la consulta actual
@@ -1371,8 +1355,6 @@ b) Ninguna combinación supera el umbral.
 Pista de mejora:
 Agregar una validación previa o un UNION con mensaje:
 
-sql
-Copy
 -- Opción A: Validación previa (cuenta total antes de filtrar)
 SELECT 
     CASE 
@@ -1397,8 +1379,6 @@ Si tuvieras que agregar más filtros o cálculos, ¿sería claro dónde hacerlo?
 Pista de mejora:
 Usar WITH (CTE) para separar lógica en "pasos":
 
-sql
-Copy
 -- Paso 1: Filtrar vehículos y seguros activos
 WITH vehiculos_activos AS (
     SELECT v.id, v.marca, v.id_seguro
@@ -1461,8 +1441,6 @@ Pregunta disparadora:
 Pista de mejora:
 Agregar validación antes de la consulta principal:
 
-sql
-Copy
 -- Validación: ¿Hay FKs que apuntan a seguros inexistentes?
 SELECT 'FKs inválidas' AS problema, COUNT(*) AS cantidad
 FROM vehiculos v
@@ -1489,8 +1467,6 @@ Si la consulta es pesada y los datos no cambian mucho, considerá:
 
 Opción A: Vista materializada (si tu motor lo soporta, ej. PostgreSQL):
 
-sql
-Copy
 CREATE MATERIALIZED VIEW mv_vehiculos_por_marca_cobertura AS
 SELECT 
     v.marca,
@@ -1680,7 +1656,8 @@ Preguntas finales de reflexión
 Si esta consulta tarda más de 5 segundos, ¿qué harías primero: índices, vista materializada, o rediseño del modelo?
 ¿Querés profundizar en alguna de estas mejoras o tenés otra consulta para optimizar? 🚀
  
-ETAPA 4
+## Etapa 4 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Podrás ayudarme a mejorar las prácticas de seguridad, explicandome cómo se hace en esta parte? DELIMITER //
 CREATE PROCEDURE buscar_vehiculo_por_dominio(IN p_dominio VARCHAR(10))
@@ -1696,14 +1673,7 @@ CALL buscar_vehiculo_por_dominio('AB110LG');
 
 -- Prueba maliciosa (intento de inyección)
 CALL buscar_vehiculo_por_dominio("AB110LG' OR '1'='1");
-Relevant Posts
-0
 
-No tweets found
-
-
-RouteLLM
-Routing to Claude Sonnet 4.5
 ¡Excelente pregunta! Vamos a analizar la seguridad de tu procedimiento paso a paso, con preguntas guía para que entiendas por qué es seguro (o no) y cómo mejorarlo.
 
 Análisis de seguridad del procedimiento actual
@@ -1768,8 +1738,6 @@ Aunque no se ejecute (por los parámetros preparados), ¿querés permitir esos v
 Pista de mejora:
 Validar el formato del dominio antes de ejecutar la consulta:
 
-sql
-Copy
 DELIMITER //
 CREATE PROCEDURE buscar_vehiculo_seguro_v1(IN p_dominio VARCHAR(10))
 BEGIN
@@ -1816,8 +1784,6 @@ Ya lo estás haciendo bien: solo devolvés dominio, marca, modelo, anio (no SELE
 
 Pero podés ir más allá:
 
-sql
-Copy
 -- Crear una vista que solo exponga datos públicos
 CREATE VIEW vehiculos_publicos AS
 SELECT dominio, marca, modelo, anio
@@ -1848,8 +1814,6 @@ Si alguien intenta buscar dominios sospechosos repetidamente, ¿cómo lo detect�
 Pista de mejora:
 Crear una tabla de auditoría:
 
-sql
-Copy
 CREATE TABLE auditoria_busquedas (
   id INT PRIMARY KEY AUTO_INCREMENT,
   usuario VARCHAR(100),
@@ -2077,3 +2041,517 @@ Preguntas finales de reflexión
 ¿Qué harías si un usuario legítimo necesita hacer más de 10 consultas por minuto? Pista: roles/permisos diferenciados.
 ¿Preferís validar el formato del dominio en el procedimiento o con un CHECK constraint en la tabla? Ambos tienen ventajas.
 ¿Querés profundizar en alguna de estas capas o analizar otro procedimiento? 🔒
+
+## Etapa 5 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Es correcta esta implementación para comparar niveles de aislamiento que hicimos? -- ----------------------------------------
+-- COMPARACIÓN DE NIVELES DE AISLAMIENTO
+
+-- Preparar datos
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+-- ============================================
+-- PRUEBA 1: READ COMMITTED
+-- ============================================
+
+-- SESIÓN 1
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';  -- Ve: 10
+-- PAUSAR - IR A SESIÓN 2
+
+-- SESIÓN 2
+START TRANSACTION;
+UPDATE stock_vehiculos SET cantidad = 5 WHERE dominio = 'AB110LG';
+COMMIT;
+-- VOLVER A SESIÓN 1
+
+-- SESIÓN 1 (continúa)
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';  -- Ve: 5 CAMBIÓ
+COMMIT;
+
+-- ============================================
+-- PRUEBA 2: REPEATABLE READ
+-- ============================================
+
+-- Resetear
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+-- SESIÓN 1
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';  -- Ve: 10
+-- *** PAUSAR - IR A SESIÓN 2 ***
+
+-- SESIÓN 2
+START TRANSACTION;
+UPDATE stock_vehiculos SET cantidad = 5 WHERE dominio = 'AB110LG';
+COMMIT;
+-- *** VOLVER A SESIÓN 1 ***
+
+-- SESIÓN 1 (continúa)
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';  -- Ve: 10 NO CAMBIÓ
+COMMIT; podría mejorarse?
+Relevant Posts
+0
+
+No tweets found
+
+
+RouteLLM
+Routing to Claude Sonnet 4.5
+¡Excelente ejercicio! Tu implementación es conceptualmente correcta, pero te guío con preguntas y pistas para que la mejores y hagas más robusta como práctica pedagógica.
+
+Análisis de tu implementación actual
+✅ Lo que está bien:
+Comparás los dos niveles más importantes (READ COMMITTED vs REPEATABLE READ).
+Usás el mismo escenario en ambas pruebas (facilita la comparación).
+Documentás el resultado esperado en comentarios.
+⚠️ Lo que puede mejorarse:
+Falta la tabla stock_vehiculos (¿existe? ¿tiene la estructura correcta?).
+No hay validaciones para verificar que el comportamiento es el esperado.
+Falta documentar otros fenómenos (dirty read, phantom read).
+No hay instrucciones claras para ejecutar en dos terminales/sesiones.
+Falta limpieza (rollback de transacciones abiertas si algo falla).
+Mejoras paso a paso
+Mejora 1: Crear la tabla de prueba (si no existe)
+Pregunta disparadora:
+
+¿Tenés la tabla stock_vehiculos creada?
+¿Tiene la estructura correcta para esta prueba?
+Pista de mejora:
+
+sql
+Copy
+-- Crear tabla de prueba (si no existe)
+CREATE TABLE IF NOT EXISTS stock_vehiculos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    dominio VARCHAR(10) UNIQUE NOT NULL,
+    cantidad INT NOT NULL DEFAULT 0,
+    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Insertar dato de prueba (si no existe)
+INSERT INTO stock_vehiculos (dominio, cantidad) 
+VALUES ('AB110LG', 10)
+ON DUPLICATE KEY UPDATE cantidad = 10;
+Pregunta de reflexión:
+
+¿Por qué usamos ON DUPLICATE KEY UPDATE en lugar de INSERT simple? → Para que el script sea idempotente (se puede ejecutar múltiples veces sin error).
+Mejora 2: Agregar validaciones automáticas
+Pregunta disparadora:
+
+¿Cómo verificás que el comportamiento observado es el esperado?
+¿Qué pasa si un estudiante ejecuta mal la secuencia?
+Pista de mejora:
+Agregar SELECT con mensajes claros:
+
+sql
+Copy
+-- ============================================
+-- PRUEBA 1: READ COMMITTED
+-- ============================================
+
+-- Resetear datos
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+-- SESIÓN 1
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+
+-- Lectura inicial
+SELECT 
+    cantidad,
+    'SESIÓN 1 - Lectura inicial (debería ver 10)' AS descripcion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+
+-- *** PAUSAR - IR A SESIÓN 2 ***
+-- *** En SESIÓN 2: ejecutar UPDATE y COMMIT ***
+-- *** VOLVER A SESIÓN 1 ***
+
+-- Lectura después del commit de SESIÓN 2
+SELECT 
+    cantidad,
+    CASE 
+        WHEN cantidad = 5 THEN '✅ CORRECTO: Non-repeatable read (vio el cambio)'
+        WHEN cantidad = 10 THEN '❌ ERROR: No debería ver 10 en READ COMMITTED'
+        ELSE '⚠️ INESPERADO'
+    END AS validacion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+
+COMMIT;
+Ventaja:
+
+El estudiante ve inmediatamente si el resultado es el esperado.
+Mejora 3: Instrucciones claras para dos sesiones
+Pregunta disparadora:
+
+¿Cómo ejecuta un estudiante esto en dos terminales/pestañas?
+¿Está claro cuándo pausar y cambiar de sesión?
+Pista de mejora:
+Crear dos scripts separados con nombres claros:
+
+Archivo: prueba1_sesion1.sql
+
+sql
+Copy
+-- ============================================
+-- PRUEBA 1: READ COMMITTED - SESIÓN 1
+-- ============================================
+-- INSTRUCCIONES:
+-- 1. Abrir dos terminales/pestañas de MySQL
+-- 2. Ejecutar este script en SESIÓN 1
+-- 3. Cuando veas "*** PAUSAR ***", ir a SESIÓN 2
+-- ============================================
+
+-- Resetear datos (solo en SESIÓN 1)
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+
+SELECT 
+    cantidad,
+    'Lectura inicial (debería ver 10)' AS descripcion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+
+SELECT '*** PAUSAR - IR A SESIÓN 2 Y EJECUTAR prueba1_sesion2.sql ***' AS instruccion;
+SELECT 'Presiona ENTER cuando SESIÓN 2 haya hecho COMMIT...' AS instruccion;
+
+-- (El estudiante pausa aquí y va a SESIÓN 2)
+
+-- Después de que SESIÓN 2 hizo COMMIT:
+SELECT 
+    cantidad,
+    CASE 
+        WHEN cantidad = 5 THEN '✅ Non-repeatable read (comportamiento esperado en READ COMMITTED)'
+        ELSE '❌ ERROR: Debería ver 5'
+    END AS validacion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+
+COMMIT;
+Archivo: prueba1_sesion2.sql
+
+sql
+Copy
+-- ============================================
+-- PRUEBA 1: READ COMMITTED - SESIÓN 2
+-- ============================================
+-- INSTRUCCIONES:
+-- 1. Ejecutar SOLO después de que SESIÓN 1 haya pausado
+-- 2. Después del COMMIT, volver a SESIÓN 1
+-- ============================================
+
+START TRANSACTION;
+
+UPDATE stock_vehiculos SET cantidad = 5 WHERE dominio = 'AB110LG';
+
+SELECT 'UPDATE ejecutado. Haciendo COMMIT...' AS estado;
+
+COMMIT;
+
+SELECT '✅ COMMIT completado. VOLVER A SESIÓN 1' AS instruccion;
+Ventaja:
+
+Instrucciones paso a paso, imposible equivocarse.
+Mejora 4: Documentar otros fenómenos de concurrencia
+Pregunta disparadora:
+
+¿Qué otros problemas de concurrencia existen además de non-repeatable read?
+¿Cómo demostrarías dirty read y phantom read?
+Pista de mejora:
+Agregar pruebas para los 3 fenómenos principales:
+
+A) Dirty Read (lectura sucia)
+sql
+Copy
+-- ============================================
+-- PRUEBA 3: DIRTY READ (solo en READ UNCOMMITTED)
+-- ============================================
+
+-- SESIÓN 1
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+START TRANSACTION;
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';  -- Ve: 10
+-- *** PAUSAR - IR A SESIÓN 2 ***
+
+-- SESIÓN 2
+START TRANSACTION;
+UPDATE stock_vehiculos SET cantidad = 999 WHERE dominio = 'AB110LG';
+-- NO HACER COMMIT TODAVÍA
+-- *** VOLVER A SESIÓN 1 ***
+
+-- SESIÓN 1 (continúa)
+SELECT 
+    cantidad,
+    CASE 
+        WHEN cantidad = 999 THEN '⚠️ DIRTY READ: Vio cambio no confirmado'
+        ELSE '✅ No vio cambio no confirmado'
+    END AS validacion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+COMMIT;
+
+-- SESIÓN 2 (continúa)
+ROLLBACK;  -- Deshace el cambio
+B) Phantom Read (lectura fantasma)
+sql
+Copy
+-- ============================================
+-- PRUEBA 4: PHANTOM READ
+-- ============================================
+
+-- SESIÓN 1
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+SELECT COUNT(*) AS total FROM stock_vehiculos WHERE cantidad > 5;  -- Ve: X filas
+-- *** PAUSAR - IR A SESIÓN 2 ***
+
+-- SESIÓN 2
+START TRANSACTION;
+INSERT INTO stock_vehiculos (dominio, cantidad) VALUES ('ZZ999ZZ', 100);
+COMMIT;
+-- *** VOLVER A SESIÓN 1 ***
+
+-- SESIÓN 1 (continúa)
+SELECT COUNT(*) AS total FROM stock_vehiculos WHERE cantidad > 5;  
+-- En REPEATABLE READ de MySQL (InnoDB): NO ve la nueva fila (no hay phantom read)
+-- En otros motores: podría verla
+COMMIT;
+Pregunta de reflexión:
+
+¿Por qué MySQL InnoDB no tiene phantom reads en REPEATABLE READ? → Usa gap locks (bloqueos de rango).
+Mejora 5: Tabla comparativa de resultados
+Pregunta disparadora:
+
+¿Cómo resumirías los resultados de todas las pruebas?
+¿Qué nivel de aislamiento usarías en cada caso de uso?
+Pista de mejora:
+Crear una tabla resumen al final:
+
+sql
+Copy
+-- ============================================
+-- RESUMEN: Fenómenos por nivel de aislamiento
+-- ============================================
+
+/*
+┌─────────────────────┬─────────────┬─────────────────┬──────────────────┬──────────────┐
+│ Nivel de aislamiento│ Dirty Read  │ Non-Repeatable  │ Phantom Read     │ Performance  │
+│                     │             │ Read            │                  │              │
+├─────────────────────┼─────────────┼─────────────────┼──────────────────┼──────────────┤
+│ READ UNCOMMITTED    │ ❌ Posible  │ ❌ Posible      │ ❌ Posible       │ ⚡⚡⚡ Rápido │
+│ READ COMMITTED      │ ✅ Evitado  │ ❌ Posible      │ ❌ Posible       │ ⚡⚡ Medio   │
+│ REPEATABLE READ     │ ✅ Evitado  │ ✅ Evitado      │ ✅ Evitado (InnoDB)│ ⚡ Lento    │
+│ SERIALIZABLE        │ ✅ Evitado  │ ✅ Evitado      │ ✅ Evitado       │ 🐌 Muy lento│
+└─────────────────────┴─────────────┴─────────────────┴──────────────────┴──────────────┘
+
+RECOMENDACIONES:
+- READ COMMITTED: Aplicaciones web típicas (balance entre consistencia y performance)
+- REPEATABLE READ: Reportes financieros, auditorías (default en MySQL)
+- SERIALIZABLE: Transacciones bancarias críticas (máxima consistencia)
+*/
+Mejora 6: Limpieza y manejo de errores
+Pregunta disparadora:
+
+¿Qué pasa si un estudiante ejecuta mal la secuencia y deja una transacción abierta?
+¿Cómo limpiás el estado para volver a empezar?
+Pista de mejora:
+Agregar script de limpieza:
+
+sql
+Copy
+-- ============================================
+-- SCRIPT DE LIMPIEZA (ejecutar si algo falla)
+-- ============================================
+
+-- Cerrar transacciones abiertas
+ROLLBACK;
+
+-- Resetear nivel de aislamiento al default
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+-- Resetear datos
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+-- Verificar estado
+SELECT * FROM stock_vehiculos WHERE dominio = 'AB110LG';
+
+-- Ver transacciones activas (para detectar bloqueos)
+SELECT * FROM information_schema.innodb_trx;
+
+-- Matar transacción bloqueada (si es necesario)
+-- KILL <trx_mysql_thread_id>;
+Script completo mejorado
+sql
+Copy
+-- ============================================================================
+-- COMPARACIÓN DE NIVELES DE AISLAMIENTO - VERSIÓN MEJORADA
+-- ============================================================================
+-- OBJETIVO: Demostrar diferencias entre READ COMMITTED y REPEATABLE READ
+-- REQUISITOS: Dos sesiones/terminales de MySQL abiertas simultáneamente
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- PREPARACIÓN: Crear tabla y datos de prueba
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS stock_vehiculos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    dominio VARCHAR(10) UNIQUE NOT NULL,
+    cantidad INT NOT NULL DEFAULT 0,
+    ultima_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO stock_vehiculos (dominio, cantidad) 
+VALUES ('AB110LG', 10)
+ON DUPLICATE KEY UPDATE cantidad = 10;
+
+-- Verificar estado inicial
+SELECT * FROM stock_vehiculos WHERE dominio = 'AB110LG';
+
+-- ============================================================================
+-- PRUEBA 1: READ COMMITTED (permite non-repeatable read)
+-- ============================================================================
+
+-- *** SESIÓN 1 ***
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+START TRANSACTION;
+
+SELECT 
+    cantidad,
+    NOW() AS momento,
+    'SESIÓN 1 - Lectura inicial' AS descripcion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+-- Resultado esperado: cantidad = 10
+
+-- *** PAUSAR AQUÍ - IR A SESIÓN 2 ***
+-- En SESIÓN 2, ejecutar:
+--   START TRANSACTION;
+--   UPDATE stock_vehiculos SET cantidad = 5 WHERE dominio = 'AB110LG';
+--   COMMIT;
+-- *** VOLVER A SESIÓN 1 ***
+
+-- SESIÓN 1 (continúa después del COMMIT de SESIÓN 2)
+SELECT 
+    cantidad,
+    NOW() AS momento,
+    CASE 
+        WHEN cantidad = 5 THEN '✅ Non-repeatable read detectado (esperado en READ COMMITTED)'
+        WHEN cantidad = 10 THEN '❌ ERROR: Debería ver el cambio'
+        ELSE '⚠️ Valor inesperado'
+    END AS validacion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+-- Resultado esperado: cantidad = 5 (vio el cambio)
+
+COMMIT;
+
+-- ============================================================================
+-- PRUEBA 2: REPEATABLE READ (evita non-repeatable read)
+-- ============================================================================
+
+-- Resetear datos
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+
+-- *** SESIÓN 1 ***
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+START TRANSACTION;
+
+SELECT 
+    cantidad,
+    NOW() AS momento,
+    'SESIÓN 1 - Lectura inicial' AS descripcion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+-- Resultado esperado: cantidad = 10
+
+-- *** PAUSAR AQUÍ - IR A SESIÓN 2 ***
+-- En SESIÓN 2, ejecutar:
+--   START TRANSACTION;
+--   UPDATE stock_vehiculos SET cantidad = 5 WHERE dominio = 'AB110LG';
+--   COMMIT;
+-- *** VOLVER A SESIÓN 1 ***
+
+-- SESIÓN 1 (continúa después del COMMIT de SESIÓN 2)
+SELECT 
+    cantidad,
+    NOW() AS momento,
+    CASE 
+        WHEN cantidad = 10 THEN '✅ Lectura repetible garantizada (esperado en REPEATABLE READ)'
+        WHEN cantidad = 5 THEN '❌ ERROR: No debería ver el cambio'
+        ELSE '⚠️ Valor inesperado'
+    END AS validacion
+FROM stock_vehiculos 
+WHERE dominio = 'AB110LG';
+-- Resultado esperado: cantidad = 10 (NO vio el cambio)
+
+COMMIT;
+
+-- Verificar que el cambio SÍ se aplicó (fuera de la transacción)
+SELECT cantidad FROM stock_vehiculos WHERE dominio = 'AB110LG';
+-- Ahora debería ver: cantidad = 5
+
+-- ============================================================================
+-- VALIDACIONES ADICIONALES
+-- ============================================================================
+
+-- Ver nivel de aislamiento actual
+SELECT @@transaction_isolation AS nivel_aislamiento_actual;
+
+-- Ver transacciones activas (útil para detectar bloqueos)
+SELECT 
+    trx_id,
+    trx_state,
+    trx_started,
+    trx_isolation_level,
+    trx_mysql_thread_id
+FROM information_schema.innodb_trx;
+
+-- ============================================================================
+-- LIMPIEZA
+-- ============================================================================
+
+-- Resetear al estado inicial
+UPDATE stock_vehiculos SET cantidad = 10 WHERE dominio = 'AB110LG';
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;  -- Default de MySQL
+
+-- ============================================================================
+-- CONCLUSIONES
+-- ============================================================================
+
+/*
+┌──────────────────┬────────────────────────────────────────────────────────┐
+│ Nivel            │ Comportamiento observado                               │
+├──────────────────┼────────────────────────────────────────────────────────┤
+│ READ COMMITTED   │ La SESIÓN 1 VIO el cambio hecho por SESIÓN 2          │
+│                  │ → Non-repeatable read (misma query, distinto resultado)│
+│                  │ → Útil para aplicaciones que necesitan ver cambios     │
+│                  │   recientes (ej: dashboard en tiempo real)             │
+├──────────────────┼────────────────────────────────────────────────────────┤
+│ REPEATABLE READ  │ La SESIÓN 1 NO VIO el cambio hecho por SESIÓN 2       │
+│                  │ → Snapshot consistente durante toda la transacción     │
+│                  │ → Útil para reportes, auditorías, cálculos complejos  │
+└──────────────────┴────────────────────────────────────────────────────────┘
+
+PREGUNTA DE REFLEXIÓN:
+¿Qué nivel usarías para un sistema de reservas de asientos de avión?
+Pista: Necesitás evitar que dos usuarios reserven el mismo asiento.
+Respuesta: REPEATABLE READ o SERIALIZABLE + SELECT ... FOR UPDATE
+*/
+Preguntas finales de reflexión
+¿Por qué MySQL usa REPEATABLE READ como default y no READ COMMITTED?
+→ Por compatibilidad con replicación binaria (statement-based replication).
+¿Cuándo usarías READ UNCOMMITTED en producción?
+→ Casi nunca (solo para reportes aproximados donde la precisión no importa).
+¿Cómo simularías un deadlock con estas pruebas?
+→ Dos sesiones actualizando las mismas filas en orden inverso.
+¿Qué pasa si SESIÓN 2 hace UPDATE pero NO hace COMMIT?
+→ SESIÓN 1 se bloquea esperando el lock (timeout después de innodb_lock_wait_timeout segundos).
+¿Querés que agreguemos una prueba de deadlock o de SELECT ... FOR UPDATE para bloqueos explícitos? 🔒
