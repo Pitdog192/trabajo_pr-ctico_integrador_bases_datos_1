@@ -77,7 +77,6 @@ INNER JOIN seguro_vehicular s ON v.id_seguro = s.id
 WHERE v.eliminado = FALSE AND s.eliminado = TRUE;
 
 -- PASO 1: Consulta principal con CTEs (más legible)
-
 WITH vehiculos_activos AS (
     SELECT v.id, v.marca, v.id_seguro
     FROM vehiculos v

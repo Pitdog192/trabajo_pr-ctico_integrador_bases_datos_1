@@ -4,14 +4,6 @@ USE trabajo_integrador_bases_datos_1;
 -- Se crea el usuario "secure_user"
 CREATE USER 'secure_user'@'localhost' IDENTIFIED BY 'secure_user';
 
--- Se le otorgan derechos de lectura a la vista vista_vehiculos_basicos
-GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_vehiculos_basicos TO 'secure_user'@'localhost';
-
--- Se le otorgan derechos de lectura a la vista vista_seguro_resumido
-GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_seguro_resumido TO 'secure_user'@'localhost';
-
-FLUSH PRIVILEGES;-- instrucción en bases de datos como MySQL que recarga las tablas de permisos en memoria, haciendo que los cambios realizados directamente en las tablas de permisos sean efectivos
-
 -- -----------------------------------------------------
 -- Creación de vistas
 -- Vista para ver información básica de los vehículos, con una cateroria por antiguedad.
@@ -46,6 +38,16 @@ FROM seguro_vehicular
 WHERE eliminado = FALSE
 GROUP BY aseguradora, cobertura;
 
+-- ---------------------------------------------------
+-- Se le otorgan derechos de lectura a la vista vista_vehiculos_basicos
+GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_vehiculos_basicos TO 'secure_user'@'localhost';
+
+-- Se le otorgan derechos de lectura a la vista vista_seguro_resumido
+GRANT SELECT ON trabajo_integrador_bases_datos_1.vista_seguro_resumido TO 'secure_user'@'localhost';
+
+FLUSH PRIVILEGES; -- instrucción en bases de datos como MySQL que recarga las tablas de permisos en memoria, haciendo que los cambios realizados directamente en las tablas de permisos sean efectivos
+
+
 -- ----------------------------------
 -- PRUEBAS DE INTEGRIDAD
 INSERT INTO vehiculos (id, eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
@@ -55,14 +57,14 @@ VALUES (1, FALSE, 'ZZ999ZZ', 'FIAT', 'UNO', 2020, 'TESTCHASIS', NULL); -- Esto d
 INSERT INTO vehiculos (eliminado, dominio, marca, modelo, anio, nro_chasis, id_seguro)
 VALUES (FALSE, 'XY123ZT', 'FORD', 'FOCUS', 1800, 'TESTCHASIS2', NULL); -- debería fallar por año fuera de rango del CHECK
 
-DELIMITER $$ -- Cambia el delimitador de la query ; por $$ 
+DELIMITER $$
 CREATE PROCEDURE buscar_vehiculo_por_dominio(IN p_dominio VARCHAR(10))
 BEGIN
   SELECT dominio, marca, modelo, anio
   FROM vehiculos
   WHERE dominio = p_dominio;
 END $$
-DELIMITER ;
+DELIMITER ; 
 
 -- Prueba legítima
 CALL buscar_vehiculo_por_dominio('AB110LG');
@@ -89,7 +91,7 @@ SELECT dominio, marca, modelo, anio
 FROM vehiculos
 WHERE eliminado = FALSE;
 
-DELIMITER //
+DELIMITER $$
 CREATE PROCEDURE buscar_vehiculo_seguro(
   IN p_dominio VARCHAR(10), 
   IN p_usuario VARCHAR(100), 
@@ -132,7 +134,7 @@ BEGIN
   -- AUDITORÍA
   INSERT INTO auditoria_busquedas (usuario, dominio_buscado, ip_origen, resultado_encontrado)
   VALUES (p_usuario, p_dominio, p_ip, v_encontrado);
-END //
+END $$
 DELIMITER ;
 
 -- Prueba legítima

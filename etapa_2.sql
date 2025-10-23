@@ -7,13 +7,18 @@ SET @prefijo = DATE_FORMAT(NOW(), '%Y%m%d%H%i%s');
 DROP TEMPORARY TABLE IF EXISTS numeros; 
 CREATE TEMPORARY TABLE numeros (n INT PRIMARY KEY);
 
+-- Ver límite actual
+SHOW VARIABLES LIKE 'cte_max_recursion_depth';
+
+-- Aumentar si es necesario (default: 1000)
+SET SESSION cte_max_recursion_depth = 200000;
 INSERT INTO numeros (n)
 WITH RECURSIVE serie AS (
     SELECT 1 AS n
     UNION ALL
     SELECT n + 1 FROM serie WHERE n < 200000
 )
-SELECT n FROM serie;
+SELECT n FROM serie; 
 
 -- ----------------------------------------------------------------------------
 -- PASO 2: Insertar 150.000 seguros
@@ -110,7 +115,8 @@ JOIN (
 ) s_num ON v_num.rn = s_num.rn
 SET v.id_seguro = s_num.id;
 
--- 1. Integridad referencial: ¿Hay FKs inválidas? (debe ser 0)
+-- -------------------------------------------------------
+-- 1. Integridad referencial (debe ser 0)
 SELECT 'FKs inválidas' AS validacion, COUNT(*) AS cantidad
 FROM vehiculos v
 WHERE v.id_seguro IS NOT NULL 

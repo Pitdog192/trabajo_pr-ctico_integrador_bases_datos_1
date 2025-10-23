@@ -9,8 +9,7 @@ CREATE TABLE IF NOT EXISTS stock_vehiculos (
 );
 
 -- Datos de prueba
-INSERT IGNORE INTO stock_vehiculos (dominio, cantidad)
-VALUES ('AB110LG', 10), ('AB110LL', 10);
+INSERT INTO stock_vehiculos (dominio, cantidad) VALUES ('AB110LG', 10), ('AB110LL', 10);
 
 -- -------------------------------------------------
 -- Derechos al usuario secundario a tabla de prueba para simulación de Deadlock
@@ -33,6 +32,7 @@ UPDATE stock_vehiculos SET cantidad = cantidad - 1 WHERE dominio = 'AB110LG';
 -- Esperar antes de ejecutar la siguiente línea
 UPDATE stock_vehiculos SET cantidad = cantidad - 1 WHERE dominio = 'AB110LL';
 COMMIT;
+
 
 -- SESIÓN 2
 START TRANSACTION;
